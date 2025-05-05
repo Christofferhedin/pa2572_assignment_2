@@ -7,7 +7,47 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error, r2_score 
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from sklearn.impute import SimpleImputer
+from sklearn.ensemble import RandomForestRegressor
 
+# Feature groups
+categorical_features = ['neighbourhood', 'room_type']
+numerical_features = ['latitude', 'longitude', 'bedrooms', 'accommodates', 'bathrooms', 'beds']
+amenity_features = [
+        "Wifi", "Kitchen", "Heating", "Air conditioning", "Washer", "Dryer", 
+        "TV", "Hair dryer", "Iron", "Smoke alarm", "Fire extinguisher", 
+        "Dishwasher", "Refrigerator", "Microwave", "Oven", "Stove", "Coffee maker",
+        "Hot water", "Elevator", "Free parking"
+    ]
+# Pipelines
+categorical_pipeline = Pipeline([
+    ('imputer', SimpleImputer(strategy='most_frequent')),
+    ('onehot', OneHotEncoder(handle_unknown='ignore'))
+])
+
+numerical_pipeline = Pipeline([
+    ('imputer', SimpleImputer(strategy='mean')),
+    ('scaler', StandardScaler())
+])
+
+binary_pipeline = Pipeline([
+    ('imputer', SimpleImputer(strategy='constant', fill_value=0))
+])
+
+# Full transformer
+preprocessor = ColumnTransformer(transformers=[
+    ('cat', categorical_pipeline, categorical_features),
+    ('num', numerical_pipeline, numerical_features),
+])
+
+# Final pipeline with a model
+model_pipeline = Pipeline([
+    ('preprocessing', preprocessor),
+    ('regressor', RandomForestRegressor(n_estimators=100, random_state=42))
+])
 
 # load the data
 def load_data():
@@ -23,6 +63,17 @@ def clean_data(df):
     # convert price $ to numeric
     df_clean["price"] = df_clean["price"].replace("[\$,]", "", regex=True).astype(float)
     
+
+    print(df_clean["price"].describe())
+
+    # remove extreme outliers in price
+    q1 = df_clean["price"].quantile(0.01)
+    q3 = df_clean["price"].quantile(0.99)
+    iqr = q3 - q1
+
+    df_clean = df_clean[(df_clean["price"] >= max(0, q1 - 1.5 * iqr)) & (df_clean["price"] <= q3 + 1.5 * iqr)]
+    print("\nPrice statistics after outlier removal:")
+    print(df_clean["price"].describe())
     # handle missing values for numerical columns
     numeric_cols = ["bathrooms", "bedrooms", "beds", "accommodates", "minimum_nights"]
     for col in numeric_cols:
@@ -51,6 +102,7 @@ def clean_data(df):
 
     # create title and description features
     if "name" in df_clean.columns:
+        df_clean["name"] = df_clean["name"].fillna("")
         df_clean["title_word_count"] = df_clean["name"].fillna("").apply(lambda x:len(str(x).split()))
         df_clean["title_length"] = df_clean["name"].fillna("").apply(len)
     
@@ -210,10 +262,34 @@ def train_price_model(df_clean):
         return model.predict(x_new_scaled)
     
     return predict_price, x.columns, rmse, r2, feature_importance
+df_clean = clean_data(df)  # Clean the data first
 
-train = train_price_model(df_clean)
+# Ensure no missing target values
+df_clean = df_clean[df_clean['price'].notna()]
+X = df_clean[categorical_features + numerical_features]
+y = df_clean['price']
+x_train, x_test, y_train, y_test = train_test_split(X, y, test_size = 0.2, random_state=42)
+
+
+model_pipeline.fit(x_train, y_train)
+
+
+y_pred = model_pipeline.predict(x_test)
+rmse = np.sqrt(mean_squared_error(y_test, y_pred))
+r2 = r2_score(y_test, y_pred)
+
+y_pred = model_pipeline.predict(x_test)
+
+# Evaluate
+rmse = np.sqrt(mean_squared_error(y_test, y_pred))
+r2 = r2_score(y_test, y_pred)
+
+print(f"RMSE: {rmse:.2f}")
+print(f"R²: {r2:.4f}")
+# train = train_price_model(df_clean)
+# advanced print with the train_price_model
 model, feature_cols, rmse, r2, importance = train_price_model(df_clean)
 print(f"Model RMSE: {rmse:.2f}")
 print(f"Model R² Score: {r2:.4f}")
 print("\nTop 10 Important Features:")
-print(importance)
+print(importance.head(10))
