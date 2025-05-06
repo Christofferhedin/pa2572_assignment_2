@@ -99,6 +99,8 @@ def clean_data(df):
     # extract room features
     df_clean["is_entire_home"] = df_clean["room_type"].apply(lambda x:1 if x == "Entire home/apt" else 0)
     df_clean["is_private_room"] = df_clean["room_type"].apply(lambda x:1 if x == "Private room" else 0)
+    df_clean["is_hotel_room"] = df_clean["room_type"].apply(lambda x:1 if x == "Hotel room" else 0)
+    df_clean["is_shared_room"] = df_clean["room_type"].apply(lambda x:1 if x == "Shared room" else 0)
 
     # create title and description features
     if "name" in df_clean.columns:
@@ -107,7 +109,9 @@ def clean_data(df):
         df_clean["title_length"] = df_clean["name"].fillna("").apply(len)
     
     if "description" in df_clean.columns:
+        df_clean["description"] = df_clean["description"].fillna("")
         df_clean["description_word_count"] = df_clean["description"].fillna("").apply(lambda x: len(str(x).split()))
+        df_clean["description_length"] = df_clean["description"].apply(len)
     
     # add review score features
     review_score_cols = [
@@ -118,7 +122,8 @@ def clean_data(df):
 
     for col in review_score_cols:
         if col in df_clean.columns:
-            df_clean[col] = df_clean[col].fillna(df_clean[col].median())
+            col_mean = df_clean[col].mean()
+            df_clean[col] = df_clean[col].fillna(col_mean)
 
     # superhost feature
     if "host_is_superhost" in df_clean.columns:
@@ -135,6 +140,16 @@ def clean_data(df):
 
     if "reviews_per_month" in df_clean.columns:
         df_clean["reviews_per_monthn"] = df_clean["reviews_per_month"].fillna(0)
+
+    # location features
+    if "latitude" in df_clean.columns and "longitude" in df_clean.columns:
+        # calc distance from city center
+        city_center_lat = 59.3293
+        city_center_lon = 18.0686
+
+        df_clean["distance_to_center"] = np.sqrt(
+            (df_clean["latitude"] - city_center_lat)**2 + (df_clean["longitude"] - city_center_lon)**2
+        ) * 111 # aproximate conversation to kilometers
 
     return df_clean
 
