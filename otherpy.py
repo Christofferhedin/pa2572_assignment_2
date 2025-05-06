@@ -314,5 +314,74 @@ def get_top_amenities(df_clean, n):
 print(get_top_amenities(df_clean, 10))
 
 
-def predict_price(features):
-    """predict the price given the input features"""
+def predict_price(features_dict):
+    """predict the price given the input features
+    features_dict : dict
+        - neighbourhood: str - Neighborhood name
+        - room_type: str - Type of room (Entire home/apt, Private room, etc.)
+        - latitude: float - Latitude coordinate
+        - longitude: float - Longitude coordinate  
+        - bedrooms: int - Number of bedrooms
+        - accommodates: int - Number of people it accommodates
+        - bathrooms: float - Number of bathrooms
+        - beds: int - Number of beds
+        - amenities: list - List of amenities as strings
+    
+    """
+    try:
+        model = load_model()
+        features_dict_copy = features_dict.copy()
+
+        # convert amenities to proper format if it's not already a list
+        if "amenities" in features_dict_copy:
+            if isinstance(features_dict_copy["amenities"], list):
+                features_dict_copy["amenities"] = json.dumps(features_dict_copy["amenities"])
+            elif not isinstance(features_dict_copy["amenities"], str):
+                features_dict_copy["amenities"] = "[]"
+        else:
+            features_dict_copy["amenities"] = "[]"
+           
+        df_features = pd.DataFrame([features_dict_copy])
+
+        # make sure all required columns are present
+        required_cols = ['neighbourhood', 'room_type', 'latitude', 'longitude', 
+                        'bedrooms', 'accommodates', 'bathrooms', 'beds', 'amenities']
+        
+        for col in required_cols:
+            if col not in df_features.columns:
+                if col in ['bedrooms', 'accommodates', 'bathrooms', 'beds']:
+                    # fill numeric columns with median values 
+                    df_features[col] = df_clean[col].median()
+                elif col == "amenities":
+                    df_features[col] = "[]"
+                else:
+                    # fill categorical columns with most frequent values
+                    df_features[col] = df_clean[col].mode().iloc[0]
+        
+        # make prediciton
+        predict_price = model.predict(df_features)[0]
+
+        return round(predict_price, 2)
+    except Exception as e:
+        print(f"Error in prediction: {e}")
+        return None
+
+sample_features = {
+    'neighbourhood': 'Södermalms',
+        'room_type': 'Private room',
+        'latitude': 59.31389,
+        'longitude': 18.06087,
+        'bedrooms': 1,
+        'accommodates': 2,
+        'bathrooms': 1.0,
+        'beds': 1,
+        'amenities': ["Hair dryer", "Hangers", "Long term stays allowed", "Host greets you", "Bathtub",
+                       "Luggage dropoff allowed", "Iron", "Essentials", "Free washer \u2013 In building",
+                        "Elevator", "Free dryer \u2013 In building", "Courtyard view", "Smoke alarm", "TV",
+                        "Garden view", "Dishes and silverware", "Shared backyard \u2013 Not fully fenced",
+                        "Outdoor playground", "Heating", "Hot water", "Shampoo", "Bed linens", 
+                        "Extra pillows and blankets", "Lock on bedroom door", "Fast wifi \u2013 399 Mbps",
+                        "Park view", "Refrigerator", "Microwave", "Coffee maker"]
+}
+predicted_price = predict_price(sample_features)
+print(f"Predicted price: ${predicted_price} per night")
