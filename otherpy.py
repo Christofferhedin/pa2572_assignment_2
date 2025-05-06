@@ -15,7 +15,7 @@ from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import FunctionTransformer
 from geopy.geocoders import Nominatim
 import pickle 
-from joblib import dump, load
+from collections import Counter
 # List of (compiled regex pattern, replacement) in priority order
 NORMALIZATION_RULES = [
     # ⚡ Core utilities
@@ -285,3 +285,34 @@ def get_lat_long_from_address(address):
     except:
         return None, None
 
+def get_top_neighbourhoods(df_clean ,n):
+
+    top_neighbourhoods = df_clean.groupby("neighbourhood_cleansed")["price"].agg(["mean", "count"])
+    top_neighbourhoods = top_neighbourhoods[top_neighbourhoods["count"] > 10]
+    return top_neighbourhoods.sort_values("mean", ascending=False).head(n)
+
+print(get_top_neighbourhoods(df_clean, 5))
+
+def get_top_amenities(df_clean, n):
+    """get top n amenities"""
+    all_amenities = []
+    for amenities_list in df_clean["amenities"].apply(ast.literal_eval):
+        if isinstance(amenities_list, list):
+            # apply normilization to each amenity
+            normalized_amenites = [normalize_amenity(unicodedata.normalize("NFKD", item).lower().strip('-–—•*.,:;!?()[]{}"\' '))
+                                   for item in amenities_list if isinstance(item, str)]
+            all_amenities.extend(normalized_amenites)
+
+    amenity_counts = Counter(all_amenities)
+    top_amenities = amenity_counts.most_common(n)
+
+    # convert to dataframe
+    top_amenities_df = pd.DataFrame(top_amenities, columns=["Amenity", "Count"])
+
+    return top_amenities_df
+
+print(get_top_amenities(df_clean, 10))
+
+
+def predict_price(features):
+    """predict the price given the input features"""
