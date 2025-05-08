@@ -1,5 +1,5 @@
 import streamlit as st
-from otherpy import predict_price, load_model, load_data, clean_data, get_top_amenities, get_lat_long_from_address, normalize_amenity
+from otherpy import predict_price, load_model, load_data, clean_data, get_top_amenities, get_lat_long_from_address, normalize_amenity, get_dynamic_title_tips
 from collections import Counter
 import re
 import ast
@@ -23,12 +23,12 @@ def get_neighborhood_from_coords(lat, lng):
     try:
         geolocator = Nominatim(user_agent="airbnb_estimator")
         location = geolocator.reverse((lat, lng), exactly_one=True)
-        address = location.raw['address']
+        address = location.raw["address"]
         # Try to get neighborhood or district
-        for key in ['neighbourhood', 'suburb', 'district', 'quarter']:
+        for key in ["neighbourhood", "suburb", "district", "quarter"]:
             if key in address:
                 return address[key]
-        return address.get('city_district', 'Unknown neighborhood')
+        return address.get("city_district", "Unknown neighborhood")
     except:
         return "Unknown neighborhood"
 
@@ -65,11 +65,11 @@ def get_competetive_insights(df_clean):
         # common words in titels
         if "name" in top_rated.columns:
             all_title_words = " ".join(top_rated["name"].fillna("").astype(str)).lower()
-            words = re.findall(r'\b[a-z]{3,}\b', all_title_words)
+            words = re.findall(r"\b[a-z]{3,}\b", all_title_words)
             word_counter = Counter(words)
 
             # remove common stop words
-            stop_words = {'and', 'the', 'with', 'for', 'from', 'this', 'that', 'have', 'has', "och"}
+            stop_words = {"and", "the", "with", "for", "from", "this", "that", "have", "has", "och", "med", "på", "för"}
 
             for word in stop_words:
                 if word in stop_words:
@@ -169,15 +169,15 @@ def main():
         # estimate button
         if st.button("Estimate price"):
             features = {
-                'neighbourhood': neighborhood,
-                'room_type': room_type,
-                'latitude': lat,
-                'longitude': lng,
-                'bedrooms': bedrooms,
-                'accommodates': accommodates,
-                'bathrooms': bathrooms,
-                'beds': beds,
-                'amenities': selected_amenities
+                "neighbourhood": neighborhood,
+                "room_type": room_type,
+                "latitude": lat,
+                "longitude": lng,
+                "bedrooms": bedrooms,
+                "accommodates": accommodates,
+                "bathrooms": bathrooms,
+                "beds": beds,
+                "amenities": selected_amenities
             }
 
             print("\n===== FEATURES USED FOR PRICE ESTIMATION =====")
@@ -202,11 +202,18 @@ def main():
                 # recomendations based on amenities
                 insights = get_competetive_insights(df_clean)
                 missing_top_amenities = [item for item in insights.get("top_amenities", []) if item not in selected_amenities]
+                title_keywords = get_dynamic_title_tips(df_clean, neighborhood, room_type)
+
+                if title_keywords:
+                    st.subheader("Suggested title keywords:")
+                    st.info(f"{', '.join(title_keywords)}")
+
+
 
                 if missing_top_amenities:
                     st.info(f"""
                     **Stand out from competition by adding these popular amenities:**
-                    {', '.join(missing_top_amenities[:5])}
+                    {", ".join(missing_top_amenities[:5])}
                     """)
                 else:
                     st.error("Couldn't estimate price. Please check your inputs")
@@ -236,7 +243,7 @@ def main():
         st.subheader("Tips for lisiting title and description")
         if "top_title_words" in insights:
             st.write("Popular words in top rated listing titels:")
-            st.write(", ".join(insights['top_title_words']))
+            st.write(", ".join(insights["top_title_words"]))
 
         if "avg_title_length" in insights:
             st.write(f"Ideal title length: {insights['avg_title_length']} characters")

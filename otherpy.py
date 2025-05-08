@@ -17,61 +17,62 @@ from geopy.geocoders import Nominatim
 import pickle 
 from collections import Counter
 import time
+from collections import Counter
 
 NORMALIZATION_RULES = [
 
-    (re.compile(r'\b(air conditioning|central air conditioning|portable air conditioning)\b', re.I), 'air conditioning'),
-    (re.compile(r'\b(heating|central heating|radiant heating|split type ductless system)\b', re.I), 'heating'),
-    (re.compile(r'\b(hot water kettle|coffee( maker)?|bread maker|rice maker|toaster|blender)\b', re.I), 'kitchen appliance'),
-    (re.compile(r'\bmicrowave( oven)?\b', re.I), 'microwave'),
-    (re.compile(r'\bfreezer\b', re.I), 'freezer'),
-    (re.compile(r'\b(refrigerator|mini fridge|smeg refrigerator|siemens refrigerator|electrolux refrigerator)\b', re.I), 'refrigerator'),
-    (re.compile(r'\b(dishwasher|oven|stove|electric stove|induction stove|gas stove)\b', re.I), 'cooking appliance'),
-    (re.compile(r'\bclothing storage\b', re.I), 'clothing storage'),
+    (re.compile(r"\b(air conditioning|central air conditioning|portable air conditioning)\b", re.I), "air conditioning"),
+    (re.compile(r"\b(heating|central heating|radiant heating|split type ductless system)\b", re.I), "heating"),
+    (re.compile(r"\b(hot water kettle|coffee( maker)?|bread maker|rice maker|toaster|blender)\b", re.I), "kitchen appliance"),
+    (re.compile(r"\bmicrowave( oven)?\b", re.I), "microwave"),
+    (re.compile(r"\bfreezer\b", re.I), "freezer"),
+    (re.compile(r"\b(refrigerator|mini fridge|smeg refrigerator|siemens refrigerator|electrolux refrigerator)\b", re.I), "refrigerator"),
+    (re.compile(r"\b(dishwasher|oven|stove|electric stove|induction stove|gas stove)\b", re.I), "cooking appliance"),
+    (re.compile(r"\bclothing storage\b", re.I), "clothing storage"),
 
 
-    (re.compile(r'\b(shower gel|body soap|shampoo|conditioner|bidet)\b', re.I), 'bathroom essentials'),
-    (re.compile(r'\b(bathroom|bathtub|baby bath|hot tub)\b', re.I), 'bathroom'),
-    (re.compile(r'\b(towels|beach towels|pool towels)\b', re.I), 'towels'),
-    (re.compile(r'\b(washing machine|washer|dryer|laundromat)\b', re.I), 'laundry'),
-    (re.compile(r'\b(iron|ironing board|clothes steamer)\b', re.I), 'ironing equipment'),
-    (re.compile(r'\b(hair dryer|hair straightener|hair curler)\b', re.I), 'hair dryer'),
+    (re.compile(r"\b(shower gel|body soap|shampoo|conditioner|bidet)\b", re.I), "bathroom essentials"),
+    (re.compile(r"\b(bathroom|bathtub|baby bath|hot tub)\b", re.I), "bathroom"),
+    (re.compile(r"\b(towels|beach towels|pool towels)\b", re.I), "towels"),
+    (re.compile(r"\b(washing machine|washer|dryer|laundromat)\b", re.I), "laundry"),
+    (re.compile(r"\b(iron|ironing board|clothes steamer)\b", re.I), "ironing equipment"),
+    (re.compile(r"\b(hair dryer|hair straightener|hair curler)\b", re.I), "hair dryer"),
 
-    (re.compile(r'\b(crib|pack n play|travel crib)\b', re.I), 'crib / pack n play'),
-    (re.compile(r'\bchanging table\b', re.I), 'changing table'),
-    (re.compile(r'\bhigh chair\b', re.I), 'high chair'),
-    (re.compile(r'\b(baby safety gates|outlet covers|baby monitor)\b', re.I), 'child safety'),
-    (re.compile(r'\b(children’s books and toys|books and reading material|board games|arcade games|life size games)\b', re.I), 'kids’ entertainment'),
-
-
-    (re.compile(r'\b(tv|hdtv)\b', re.I), 'tv'),
-    (re.compile(r'\b(sound system|bluetooth sound system|sonos|audiopro)\b', re.I), 'sound system'),
-    (re.compile(r'\b(game console|ps4|ping pong table|pool table|movie theater)\b', re.I), 'entertainment'),
-    (re.compile(r'\b(pocket wifi|ethernet connection|wifi)\b', re.I), 'wifi / internet'),
-    (re.compile(r'\b(airplay|chromecast|hbo max|apple tv|netflix|hulu|disney\+|amazon prime video)\b', re.I), 'streaming services'),
-    (re.compile(r'\b(ev charger|electric vehicle charger|charging station)\b', re.I), 'ev charger'),
+    (re.compile(r"\b(crib|pack n play|travel crib)\b", re.I), "crib / pack n play"),
+    (re.compile(r"\bchanging table\b", re.I), "changing table"),
+    (re.compile(r"\bhigh chair\b", re.I), "high chair"),
+    (re.compile(r"\b(baby safety gates|outlet covers|baby monitor)\b", re.I), "child safety"),
+    (re.compile(r"\b(children’s books and toys|books and reading material|board games|arcade games|life size games)\b", re.I), "kids’ entertainment"),
 
 
-    (re.compile(r'\b(pool|hot tub)\b', re.I), 'pool / hot tub'),
-    (re.compile(r'\b(barbecue utensils|bbq grill)\b', re.I), 'bbq grill'),
-    (re.compile(r'\b(outdoor.*|backyard|patio|balcony|garden view|park view|beach view|bay view|canal view|courtyard view|city skyline view|lake view|waterfront|ski-in/ski-out)\b', re.I), 'outdoor / view'),
-    (re.compile(r'\b(outdoor kitchen|outdoor dining area)\b', re.I), 'outdoor kitchen'),
+    (re.compile(r"\b(tv|hdtv)\b", re.I), "tv"),
+    (re.compile(r"\b(sound system|bluetooth sound system|sonos|audiopro)\b", re.I), "sound system"),
+    (re.compile(r"\b(game console|ps4|ping pong table|pool table|movie theater)\b", re.I), "entertainment"),
+    (re.compile(r"\b(pocket wifi|ethernet connection|wifi)\b", re.I), "wifi / internet"),
+    (re.compile(r"\b(airplay|chromecast|hbo max|apple tv|netflix|hulu|disney\+|amazon prime video)\b", re.I), "streaming services"),
+    (re.compile(r"\b(ev charger|electric vehicle charger|charging station)\b", re.I), "ev charger"),
 
 
-    (re.compile(r'\b(parking|driveway parking|street parking|paid parking|carport)\b', re.I), 'parking'),
-    (re.compile(r'\b(bike storage|bike rack|bike parking)\b', re.I), 'bike storage'),
-    (re.compile(r'\b(car rental|car service|car|vehicle)\b', re.I), 'car rental'),
-    (re.compile(r'\bgarage\b', re.I), 'garage'),
+    (re.compile(r"\b(pool|hot tub)\b", re.I), "pool / hot tub"),
+    (re.compile(r"\b(barbecue utensils|bbq grill)\b", re.I), "bbq grill"),
+    (re.compile(r"\b(outdoor.*|backyard|patio|balcony|garden view|park view|beach view|bay view|canal view|courtyard view|city skyline view|lake view|waterfront|ski-in/ski-out)\b", re.I), "outdoor / view"),
+    (re.compile(r"\b(outdoor kitchen|outdoor dining area)\b", re.I), "outdoor kitchen"),
 
 
-    (re.compile(r'\b(lock(box)?|smart lock|keypad)\b', re.I), 'secure entry'),
-    (re.compile(r'\b(smoke alarm|carbon monoxide alarm|fire extinguisher|first aid kit)\b', re.I), 'safety equipment'),
-    (re.compile(r'\b(security cameras|security system|security patrol)\b', re.I), 'security system'),
+    (re.compile(r"\b(parking|driveway parking|street parking|paid parking|carport)\b", re.I), "parking"),
+    (re.compile(r"\b(bike storage|bike rack|bike parking)\b", re.I), "bike storage"),
+    (re.compile(r"\b(car rental|car service|car|vehicle)\b", re.I), "car rental"),
+    (re.compile(r"\bgarage\b", re.I), "garage"),
 
 
-    (re.compile(r'\b(elevator|self check-in|host greets you|building staff)\b', re.I), 'guest support'),
-    (re.compile(r'\b(cleaning|housekeeping)\b', re.I), 'cleaning services'),
-    (re.compile(r'\b(exercise equipment|gym)\b', re.I), 'fitness equipment'),
+    (re.compile(r"\b(lock(box)?|smart lock|keypad)\b", re.I), "secure entry"),
+    (re.compile(r"\b(smoke alarm|carbon monoxide alarm|fire extinguisher|first aid kit)\b", re.I), "safety equipment"),
+    (re.compile(r"\b(security cameras|security system|security patrol)\b", re.I), "security system"),
+
+
+    (re.compile(r"\b(elevator|self check-in|host greets you|building staff)\b", re.I), "guest support"),
+    (re.compile(r"\b(cleaning|housekeeping)\b", re.I), "cleaning services"),
+    (re.compile(r"\b(exercise equipment|gym)\b", re.I), "fitness equipment"),
 ]
 def clean_data(df):
     
@@ -83,13 +84,24 @@ def clean_data(df):
     print(df_clean["price"].describe())
 
     # remove extreme outliers in price
-    q1 = df_clean["price"].quantile(0.05)
-    q3 = df_clean["price"].quantile(0.95)
-    iqr = q3 - q1
+    q1_price = df_clean["price"].quantile(0.05)
+    q3_price = df_clean["price"].quantile(0.95)
+    iqr_price = q3_price - q1_price
 
-    df_clean = df_clean[(df_clean["price"] >= max(0, q1 - 1.5 * iqr)) & (df_clean["price"] <= q3 + 1.5 * iqr)]
+    df_clean = df_clean[(df_clean["price"] >= max(0, q1_price - 1.5 * iqr_price)) & (df_clean["price"] <= q3_price + 1.5 * iqr_price)]
     print("\nPrice statistics after outlier removal:")
     print(df_clean["price"].describe())
+
+    # handle minimum_nights outliers
+    q1_night = df_clean["minimum_nights"].quantile(0.01)
+    q3_night = df_clean["minimum_nights"].quantile(0.99)
+    iqr_night = q3_night - q1_night
+
+    df_clean = df_clean[(df_clean["minimum_nights"] >= max(1, q1_night - 1.5 * iqr_night)) & (df_clean["minimum_nights"] <= q3_night + 1.5 * iqr_night)]
+
+    print("\nMinimum nights statistics after outlier removal:")
+    print(df_clean["minimum_nights"].describe())
+    
     # handle missing values for numerical columns
     numeric_cols = ["bathrooms", "bedrooms", "beds", "accommodates", "minimum_nights"]
     for col in numeric_cols:
@@ -107,13 +119,15 @@ def clean_data(df):
     df_clean["is_shared_room"] = df_clean["room_type"].apply(lambda x:1 if x == "Shared room" else 0)
 
     # create title and description features
-    # if "name" in df_clean.columns:
-    #     df_clean["name"] = df_clean["name"].fillna("")
-    #     df_clean["title_word_count"] = df_clean["name"].fillna("").apply(lambda x:len(str(x).split()))
-    #     df_clean["title_length"] = df_clean["name"].fillna("").apply(len)
+    if "name" in df_clean.columns:
+        df_clean["name"] = df_clean["name"].fillna("")
+        df_clean["title_word_count"] = df_clean["name"].fillna("").apply(lambda x:len(str(x).split()))
+        df_clean["title_length"] = df_clean["name"].fillna("").apply(len)
     
-    # if "description" in df_clean.columns:
-    #     df_clean["description_word_count"] = df_clean["description"].fillna("").apply(lambda x: len(str(x).split()))
+    if "description" in df_clean.columns:
+        df_clean["description"] = df_clean["description"].fillna("")
+        df_clean["description_word_count"] = df_clean["description"].fillna("").apply(lambda x: len(str(x).split()))
+        df_clean["description_length"] = df_clean["description"].fillna("").apply(len)
     
     # add review score features
     review_score_cols = [
@@ -142,7 +156,7 @@ def clean_data(df):
     if "reviews_per_month" in df_clean.columns:
         df_clean["reviews_per_monthn"] = df_clean["reviews_per_month"].fillna(0)
 
-    df_clean['num_amenities'] = df_clean['amenities'].apply(lambda x: len(ast.literal_eval(x)))
+    df_clean["num_amenities"] = df_clean["amenities"].apply(lambda x: len(ast.literal_eval(x)))
 
     print(df_clean.shape)
 
@@ -158,8 +172,8 @@ def normalize_amenity(amenity: str) -> str:
 def parse_clean_and_normalize(col):
     def clean(item):
         # unicode normalize, lowercase, strip punctuation & whitespace
-        s = unicodedata.normalize("NFKD", item).lower().strip('-–—•*.,:;!?()[]{}"\' ')
-        s = re.sub(r'\s+', ' ', s)
+        s = unicodedata.normalize("NFKD", item).lower().strip('-–—•*.,:;!?()[]{}"\" ')
+        s = re.sub(r"\s+", " ", s)
         return normalize_amenity(s)
 
     # parse literal list, clean + normalize, drop empties
@@ -193,14 +207,14 @@ class TopKMultiLabelBinarizer(BaseEstimator, TransformerMixin):
 
 # load the data
 def load_data():
-    df = pd.read_csv("listings.csv.gz", compression='gzip')
+    df = pd.read_csv("listings.csv.gz", compression="gzip")
     return df
 
 def create_transformer():
     clean_norm = FunctionTransformer(parse_clean_and_normalize, validate=False)
     
-    categorical_features = ['neighbourhood', 'room_type']
-    numerical_features = ['latitude', 'longitude', 'bedrooms', 'accommodates', 'bathrooms', 'beds']
+    categorical_features = ["neighbourhood", "room_type"]
+    numerical_features = ["latitude", "longitude", "bedrooms", "accommodates", "bathrooms", "beds", "minimum_nights"]
     
     amenities_pipeline = Pipeline([
     ("clean_norm", clean_norm),
@@ -208,20 +222,20 @@ def create_transformer():
     ])
 
     categorical_pipeline = Pipeline([
-        ('imputer', SimpleImputer(strategy='most_frequent')),
-        ('onehot', OneHotEncoder(handle_unknown='ignore'))
+        ("imputer", SimpleImputer(strategy="most_frequent")),
+        ("onehot", OneHotEncoder(handle_unknown="ignore"))
     ])
 
     numerical_pipeline = Pipeline([
-        ('imputer', SimpleImputer(strategy='mean')),
-        ('scaler', StandardScaler())
+        ("imputer", SimpleImputer(strategy="mean")),
+        ("scaler", StandardScaler())
     ])
 
     preprocessor = ColumnTransformer(transformers=[
-    ('cat', categorical_pipeline, categorical_features),
+    ("cat", categorical_pipeline, categorical_features),
     ("amenities", amenities_pipeline, "amenities"),
-    ('num', numerical_pipeline, numerical_features),
-    ('num_amenities', 'passthrough', ['num_amenities'])
+    ("num", numerical_pipeline, numerical_features),
+    ("num_amenities", "passthrough", ["num_amenities"])
 ])
 
 
@@ -229,15 +243,15 @@ def create_transformer():
 
 def fit_model(df_clean):
     model_pipeline = Pipeline([
-        ('preprocessing', preprocessor),
-        ('regressor', RandomForestRegressor(n_estimators=100, random_state=42))
+        ("preprocessing", preprocessor),
+        ("regressor", RandomForestRegressor(n_estimators=100, random_state=42))
     ])
     
     if df_clean is None:
         return
     
-    X = df_clean.drop(columns=['price'])
-    y = df_clean['price']
+    X = df_clean.drop(columns=["price"])
+    y = df_clean["price"]
     x_train, x_test, y_train, y_test = train_test_split(X, y, test_size = 0.2, random_state=42)
 
 
@@ -276,7 +290,7 @@ print(f"R²: {r2:.4f}")
 # advanced print with the train_price_model
 
 # # To get cleaned amenity names:
-# feature_names = preprocessor.named_transformers_['amenities'].named_steps['topk_binarize'].get_feature_names_out()
+# feature_names = preprocessor.named_transformers_["amenities"].named_steps["topk_binarize"].get_feature_names_out()
 # #print("Feature names:", feature_names)
 # print(X_transformed)
 
@@ -309,7 +323,7 @@ def get_top_amenities(df_clean, n):
     for amenities_list in df_clean["amenities"].apply(ast.literal_eval):
         if isinstance(amenities_list, list):
             # apply normilization to each amenity
-            normalized_amenites = [normalize_amenity(unicodedata.normalize("NFKD", item).lower().strip('-–—•*.,:;!?()[]{}"\' '))
+            normalized_amenites = [normalize_amenity(unicodedata.normalize("NFKD", item).lower().strip('-–—•*.,:;!?()[]{}"\" '))
                                    for item in amenities_list if isinstance(item, str)]
             all_amenities.extend(normalized_amenites)
 
@@ -324,6 +338,28 @@ def get_top_amenities(df_clean, n):
 print(get_top_amenities(df_clean, 10))
 
 
+def get_dynamic_title_tips(df, neighborhood, room_type):
+    # Filter listings based on neighborhood and room type
+    similar = df[
+        (df["neighbourhood_cleansed"] == neighborhood + "s") &
+        (df["room_type"] == room_type) &
+        (df["review_scores_rating"] >= 4.8)
+    ]
+
+    print(similar)
+    if len(similar) < 5:
+        return []
+
+    titles = " ".join(similar["name"].fillna("").astype(str)).lower()
+    words = re.findall(r"\b[a-z]{3,}\b", titles)
+
+    stop_words = {"and", "the", "with", "for", "from", "this", "that", "have", "has", "och", "med", "på", "för"}
+    filtered = [w for w in words if w not in stop_words]
+
+    most_common = [w for w, count in Counter(filtered).most_common(5)]
+    return most_common
+
+
 def predict_price(features_dict):
     """predict the price given the input features
     features_dict : dict
@@ -335,6 +371,7 @@ def predict_price(features_dict):
         - accommodates: int - Number of people it accommodates
         - bathrooms: float - Number of bathrooms
         - beds: int - Number of beds
+        - minimum_nights: int - Minimum nights stay
         - amenities: list - List of amenities as strings
     
     """
@@ -351,15 +388,20 @@ def predict_price(features_dict):
         else:
             features_dict_copy["amenities"] = "[]"
            
+        # calc number of amenities
+        features_dict_copy["num_amenities"] = len(ast.literal_eval(features_dict_copy["amenities"]) if isinstance(features_dict_copy["amenities"], str) else features_dict_copy["amenities"])
+        
         df_features = pd.DataFrame([features_dict_copy])
 
         # make sure all required columns are present
-        required_cols = ['neighbourhood', 'room_type', 'latitude', 'longitude', 
-                        'bedrooms', 'accommodates', 'bathrooms', 'beds', 'amenities', "num_amenities"]
+        required_cols = ["neighbourhood", "room_type", "latitude", "longitude", 
+                        "bedrooms", "accommodates", "bathrooms", "beds", "minimum_nights", "amenities", "num_amenities"]
+        
+        df_clean = clean_data(load_data())
         
         for col in required_cols:
             if col not in df_features.columns:
-                if col in ['bedrooms', 'accommodates', 'bathrooms', 'beds']:
+                if col in ["bedrooms", "accommodates", "bathrooms", "beds", "minimum_nights"]:
                     # fill numeric columns with median values 
                     df_features[col] = df_clean[col].median()
                 elif col == "amenities":
@@ -377,22 +419,22 @@ def predict_price(features_dict):
         return None
 
 # sample_features = {
-#     'neighbourhood': 'Södermalms',
-#         'room_type': 'Private room',
-#         'latitude': 59.31389,
-#         'longitude': 18.06087,
-#         'bedrooms': 1,
-#         'accommodates': 2,
-#         'bathrooms': 1.0,
-#         'beds': 1,
-#         'amenities': ["Hair dryer", "Hangers", "Long term stays allowed", "Host greets you", "Bathtub",
+#     "neighbourhood": "Södermalms",
+#         "room_type": "Private room",
+#         "latitude": 59.31389,
+#         "longitude": 18.06087,
+#         "bedrooms": 1,
+#         "accommodates": 2,
+#         "bathrooms": 1.0,
+#         "beds": 1,
+#         "amenities": ["Hair dryer", "Hangers", "Long term stays allowed", "Host greets you", "Bathtub",
 #                        "Luggage dropoff allowed", "Iron", "Essentials", "Free washer \u2013 In building",
 #                         "Elevator", "Free dryer \u2013 In building", "Courtyard view", "Smoke alarm", "TV",
 #                         "Garden view", "Dishes and silverware", "Shared backyard \u2013 Not fully fenced",
 #                         "Outdoor playground", "Heating", "Hot water", "Shampoo", "Bed linens", 
 #                         "Extra pillows and blankets", "Lock on bedroom door", "Fast wifi \u2013 399 Mbps",
 #                         "Park view", "Refrigerator", "Microwave", "Coffee maker"],
-#         "num_amenities": len(sample_features['amenities'])
+#         "num_amenities": len(sample_features["amenities"])
 # }
 # predicted_price = predict_price(sample_features)
 # print(f"Predicted price: ${predicted_price} per night")
