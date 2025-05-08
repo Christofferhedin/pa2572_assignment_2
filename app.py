@@ -69,7 +69,7 @@ def get_competetive_insights(df_clean):
             word_counter = Counter(words)
 
             # remove common stop words
-            stop_words = {'and', 'the', 'with', 'for', 'from', 'this', 'that', 'have', 'has'}
+            stop_words = {'and', 'the', 'with', 'for', 'from', 'this', 'that', 'have', 'has', "och"}
 
             for word in stop_words:
                 if word in stop_words:
@@ -103,7 +103,8 @@ def main():
         st.subheader("Location")
         col1, col2 = st.columns(2)
         with col1:
-            address = st.text_input("Address", "Södermalm, Stockholm, Sweden")
+            address = st.text_input("Address", "Götgatan 14, Stockholm, Sweden")
+            neighborhood = st.text_input("Neighborhood")
             use_address = st.checkbox("Use address for location", value=True)
         
         with col2:
@@ -112,6 +113,7 @@ def main():
                 if lat and lng:
                     st.success(f"Found location: {lat:.4f}, {lng:.4f}")
                     neighborhood = get_neighborhood_from_coords(lat, lng)
+                    #neighborhood = address.split(",")[1].strip()
                     st.write(f"Neighborhood: {neighborhood}")
                 else:
                     st.error("Could not geocode address. Please enter coordinates manually.")
@@ -185,7 +187,7 @@ def main():
             estimated_price = predict_price(features)
 
             if estimated_price:
-                st.success(f"Estimated nightly price: ${estimated_price:.2f}")
+                st.success(f"Estimated nightly price: {estimated_price:.2f} SEK")
 
                 # show price range
                 st.write("Suggested price range:")
@@ -193,9 +195,9 @@ def main():
                 high_price = estimated_price * 1.15
 
                 col1, col2, col3 = st.columns(3)
-                col1.metric("Lower end", f"${low_price:.0f}")
-                col2.metric("Estimated", f"${estimated_price:.0f}")
-                col3.metric("Higher end", f"${high_price:.0f}")
+                col1.metric("Lower end", f"{low_price:.0f} SEK")
+                col2.metric("Estimated", f"{estimated_price:.0f} SEK")
+                col3.metric("Higher end", f"{high_price:.0f} SEK")
 
                 # recomendations based on amenities
                 insights = get_competetive_insights(df_clean)
@@ -221,7 +223,7 @@ def main():
         top_neighborhoods = top_neighborhoods.sort_values("mean", ascending=False).head(10)
 
         # format for display
-        top_neighborhoods["mean"] = top_neighborhoods["mean"].map("${:.0f}".format)
+        top_neighborhoods["mean"] = top_neighborhoods["mean"].map("{:.0f} SEK".format)
         st.dataframe(top_neighborhoods.reset_index().rename(columns={"mean": "Avg Price", "count": "# Listings", "neighbourhood": "Neighborhood"}))
 
         # top amenities in high rated listings

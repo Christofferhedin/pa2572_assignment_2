@@ -16,9 +16,10 @@ from sklearn.preprocessing import FunctionTransformer
 from geopy.geocoders import Nominatim
 import pickle 
 from collections import Counter
-# List of (compiled regex pattern, replacement) in priority order
+import time
+
 NORMALIZATION_RULES = [
-    # ⚡ Core utilities
+
     (re.compile(r'\b(air conditioning|central air conditioning|portable air conditioning)\b', re.I), 'air conditioning'),
     (re.compile(r'\b(heating|central heating|radiant heating|split type ductless system)\b', re.I), 'heating'),
     (re.compile(r'\b(hot water kettle|coffee( maker)?|bread maker|rice maker|toaster|blender)\b', re.I), 'kitchen appliance'),
@@ -28,7 +29,7 @@ NORMALIZATION_RULES = [
     (re.compile(r'\b(dishwasher|oven|stove|electric stove|induction stove|gas stove)\b', re.I), 'cooking appliance'),
     (re.compile(r'\bclothing storage\b', re.I), 'clothing storage'),
 
-    # 🛁 Bathroom / toiletries
+
     (re.compile(r'\b(shower gel|body soap|shampoo|conditioner|bidet)\b', re.I), 'bathroom essentials'),
     (re.compile(r'\b(bathroom|bathtub|baby bath|hot tub)\b', re.I), 'bathroom'),
     (re.compile(r'\b(towels|beach towels|pool towels)\b', re.I), 'towels'),
@@ -36,14 +37,13 @@ NORMALIZATION_RULES = [
     (re.compile(r'\b(iron|ironing board|clothes steamer)\b', re.I), 'ironing equipment'),
     (re.compile(r'\b(hair dryer|hair straightener|hair curler)\b', re.I), 'hair dryer'),
 
-    # 🧸 Baby & kid gear
     (re.compile(r'\b(crib|pack n play|travel crib)\b', re.I), 'crib / pack n play'),
     (re.compile(r'\bchanging table\b', re.I), 'changing table'),
     (re.compile(r'\bhigh chair\b', re.I), 'high chair'),
     (re.compile(r'\b(baby safety gates|outlet covers|baby monitor)\b', re.I), 'child safety'),
     (re.compile(r'\b(children’s books and toys|books and reading material|board games|arcade games|life size games)\b', re.I), 'kids’ entertainment'),
 
-    # 🎮 Electronics & entertainment
+
     (re.compile(r'\b(tv|hdtv)\b', re.I), 'tv'),
     (re.compile(r'\b(sound system|bluetooth sound system|sonos|audiopro)\b', re.I), 'sound system'),
     (re.compile(r'\b(game console|ps4|ping pong table|pool table|movie theater)\b', re.I), 'entertainment'),
@@ -51,24 +51,24 @@ NORMALIZATION_RULES = [
     (re.compile(r'\b(airplay|chromecast|hbo max|apple tv|netflix|hulu|disney\+|amazon prime video)\b', re.I), 'streaming services'),
     (re.compile(r'\b(ev charger|electric vehicle charger|charging station)\b', re.I), 'ev charger'),
 
-    # 🏡 Outdoor & views
+
     (re.compile(r'\b(pool|hot tub)\b', re.I), 'pool / hot tub'),
     (re.compile(r'\b(barbecue utensils|bbq grill)\b', re.I), 'bbq grill'),
     (re.compile(r'\b(outdoor.*|backyard|patio|balcony|garden view|park view|beach view|bay view|canal view|courtyard view|city skyline view|lake view|waterfront|ski-in/ski-out)\b', re.I), 'outdoor / view'),
     (re.compile(r'\b(outdoor kitchen|outdoor dining area)\b', re.I), 'outdoor kitchen'),
 
-    # 🚗 Parking & transport
+
     (re.compile(r'\b(parking|driveway parking|street parking|paid parking|carport)\b', re.I), 'parking'),
     (re.compile(r'\b(bike storage|bike rack|bike parking)\b', re.I), 'bike storage'),
     (re.compile(r'\b(car rental|car service|car|vehicle)\b', re.I), 'car rental'),
     (re.compile(r'\bgarage\b', re.I), 'garage'),
 
-    # 🔒 Security & safety
+
     (re.compile(r'\b(lock(box)?|smart lock|keypad)\b', re.I), 'secure entry'),
     (re.compile(r'\b(smoke alarm|carbon monoxide alarm|fire extinguisher|first aid kit)\b', re.I), 'safety equipment'),
     (re.compile(r'\b(security cameras|security system|security patrol)\b', re.I), 'security system'),
 
-    # 🛠 Building services & extras
+
     (re.compile(r'\b(elevator|self check-in|host greets you|building staff)\b', re.I), 'guest support'),
     (re.compile(r'\b(cleaning|housekeeping)\b', re.I), 'cleaning services'),
     (re.compile(r'\b(exercise equipment|gym)\b', re.I), 'fitness equipment'),
@@ -83,8 +83,8 @@ def clean_data(df):
     print(df_clean["price"].describe())
 
     # remove extreme outliers in price
-    q1 = df_clean["price"].quantile(0.01)
-    q3 = df_clean["price"].quantile(0.99)
+    q1 = df_clean["price"].quantile(0.05)
+    q3 = df_clean["price"].quantile(0.95)
     iqr = q3 - q1
 
     df_clean = df_clean[(df_clean["price"] >= max(0, q1 - 1.5 * iqr)) & (df_clean["price"] <= q3 + 1.5 * iqr)]
@@ -107,13 +107,13 @@ def clean_data(df):
     df_clean["is_shared_room"] = df_clean["room_type"].apply(lambda x:1 if x == "Shared room" else 0)
 
     # create title and description features
-    if "name" in df_clean.columns:
-        df_clean["name"] = df_clean["name"].fillna("")
-        df_clean["title_word_count"] = df_clean["name"].fillna("").apply(lambda x:len(str(x).split()))
-        df_clean["title_length"] = df_clean["name"].fillna("").apply(len)
+    # if "name" in df_clean.columns:
+    #     df_clean["name"] = df_clean["name"].fillna("")
+    #     df_clean["title_word_count"] = df_clean["name"].fillna("").apply(lambda x:len(str(x).split()))
+    #     df_clean["title_length"] = df_clean["name"].fillna("").apply(len)
     
-    if "description" in df_clean.columns:
-        df_clean["description_word_count"] = df_clean["description"].fillna("").apply(lambda x: len(str(x).split()))
+    # if "description" in df_clean.columns:
+    #     df_clean["description_word_count"] = df_clean["description"].fillna("").apply(lambda x: len(str(x).split()))
     
     # add review score features
     review_score_cols = [
@@ -142,13 +142,19 @@ def clean_data(df):
     if "reviews_per_month" in df_clean.columns:
         df_clean["reviews_per_monthn"] = df_clean["reviews_per_month"].fillna(0)
 
+    df_clean['num_amenities'] = df_clean['amenities'].apply(lambda x: len(ast.literal_eval(x)))
+
+    print(df_clean.shape)
+
     return df_clean
+
 def normalize_amenity(amenity: str) -> str:
     """Return a canonical label for very common patterns."""
     for pattern, replacement in NORMALIZATION_RULES:
         if pattern.search(amenity):
             return replacement
     return amenity
+
 def parse_clean_and_normalize(col):
     def clean(item):
         # unicode normalize, lowercase, strip punctuation & whitespace
@@ -162,6 +168,7 @@ def parse_clean_and_normalize(col):
         (clean(i) for i in ast.literal_eval(raw) if isinstance(i, str))
         if cleaned and len(cleaned) > 2
     ])
+
 class TopKMultiLabelBinarizer(BaseEstimator, TransformerMixin):
     def __init__(self, top_k=200):
         self.top_k = top_k
@@ -211,11 +218,12 @@ def create_transformer():
     ])
 
     preprocessor = ColumnTransformer(transformers=[
-        ('cat', categorical_pipeline, categorical_features),
-        ("amenities", amenities_pipeline, "amenities"),
-        ('num', numerical_pipeline, numerical_features)
-        
-    ])
+    ('cat', categorical_pipeline, categorical_features),
+    ("amenities", amenities_pipeline, "amenities"),
+    ('num', numerical_pipeline, numerical_features),
+    ('num_amenities', 'passthrough', ['num_amenities'])
+])
+
 
     return preprocessor
 
@@ -277,12 +285,14 @@ print(f"R²: {r2:.4f}")
 geolocator = Nominatim(user_agent="airbnb_geocoder")
 def get_lat_long_from_address(address):
     try:
+        time.sleep(1)
         location = geolocator.geocode(address)
         if location:
             return location.latitude, location.longitude
         else:
             return None, None
-    except:
+    except Exception as e:
+        print("Error:", e)
         return None, None
 
 def get_top_neighbourhoods(df_clean ,n):
@@ -345,7 +355,7 @@ def predict_price(features_dict):
 
         # make sure all required columns are present
         required_cols = ['neighbourhood', 'room_type', 'latitude', 'longitude', 
-                        'bedrooms', 'accommodates', 'bathrooms', 'beds', 'amenities']
+                        'bedrooms', 'accommodates', 'bathrooms', 'beds', 'amenities', "num_amenities"]
         
         for col in required_cols:
             if col not in df_features.columns:
@@ -366,22 +376,23 @@ def predict_price(features_dict):
         print(f"Error in prediction: {e}")
         return None
 
-sample_features = {
-    'neighbourhood': 'Södermalms',
-        'room_type': 'Private room',
-        'latitude': 59.31389,
-        'longitude': 18.06087,
-        'bedrooms': 1,
-        'accommodates': 2,
-        'bathrooms': 1.0,
-        'beds': 1,
-        'amenities': ["Hair dryer", "Hangers", "Long term stays allowed", "Host greets you", "Bathtub",
-                       "Luggage dropoff allowed", "Iron", "Essentials", "Free washer \u2013 In building",
-                        "Elevator", "Free dryer \u2013 In building", "Courtyard view", "Smoke alarm", "TV",
-                        "Garden view", "Dishes and silverware", "Shared backyard \u2013 Not fully fenced",
-                        "Outdoor playground", "Heating", "Hot water", "Shampoo", "Bed linens", 
-                        "Extra pillows and blankets", "Lock on bedroom door", "Fast wifi \u2013 399 Mbps",
-                        "Park view", "Refrigerator", "Microwave", "Coffee maker"]
-}
-predicted_price = predict_price(sample_features)
-print(f"Predicted price: ${predicted_price} per night")
+# sample_features = {
+#     'neighbourhood': 'Södermalms',
+#         'room_type': 'Private room',
+#         'latitude': 59.31389,
+#         'longitude': 18.06087,
+#         'bedrooms': 1,
+#         'accommodates': 2,
+#         'bathrooms': 1.0,
+#         'beds': 1,
+#         'amenities': ["Hair dryer", "Hangers", "Long term stays allowed", "Host greets you", "Bathtub",
+#                        "Luggage dropoff allowed", "Iron", "Essentials", "Free washer \u2013 In building",
+#                         "Elevator", "Free dryer \u2013 In building", "Courtyard view", "Smoke alarm", "TV",
+#                         "Garden view", "Dishes and silverware", "Shared backyard \u2013 Not fully fenced",
+#                         "Outdoor playground", "Heating", "Hot water", "Shampoo", "Bed linens", 
+#                         "Extra pillows and blankets", "Lock on bedroom door", "Fast wifi \u2013 399 Mbps",
+#                         "Park view", "Refrigerator", "Microwave", "Coffee maker"],
+#         "num_amenities": len(sample_features['amenities'])
+# }
+# predicted_price = predict_price(sample_features)
+# print(f"Predicted price: ${predicted_price} per night")
