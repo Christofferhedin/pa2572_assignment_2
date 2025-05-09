@@ -1,9 +1,10 @@
 import streamlit as st
-from otherpy import predict_price, load_model, load_data, clean_data, get_top_amenities, get_lat_long_from_address, normalize_amenity, get_dynamic_title_tips
+from otherpy import predict_price, load_model, load_data, clean_data, get_top_amenities, get_lat_long_from_address, normalize_amenity, get_dynamic_title_tips, fit_model
 from collections import Counter
 import re
 import ast
 import json
+import pandas as pd
 from geopy.geocoders import Nominatim
 
 
@@ -64,19 +65,44 @@ def get_competetive_insights(df_clean):
 
         # common words in titels
         if "name" in top_rated.columns:
-            all_title_words = " ".join(top_rated["name"].fillna("").astype(str)).lower()
-            words = re.findall(r"\b[a-z]{3,}\b", all_title_words)
-            word_counter = Counter(words)
+            all_title_text = " ".join(top_rated["name"].fillna("").astype(str)).lower()
+            
+            # Tokenize
+            words = re.findall(r"\b[a-z]{3,}\b", all_title_text)
+            
+            # Define stop words
+            stop_words = {"and", "the", "with", "for", "from", "this", "that", "have", "has", 
+                        "och", "med", "på", "för", "ett", "en", "det", "av"}
 
-            # remove common stop words
-            stop_words = {"and", "the", "with", "for", "from", "this", "that", "have", "has", "och", "med", "på", "för"}
+            # Create bigrams
+            bigrams = [
+                f"{words[i]} {words[i + 1]}"
+                for i in range(len(words) - 1)
+                if words[i] not in stop_words and words[i + 1] not in stop_words
+            ]
 
-            for word in stop_words:
-                if word in stop_words:
-                    del word_counter[word]
-            insights["top_title_words"] = [word for word, count in word_counter.most_common(10)]
+            # Count and assign
+            bigram_counter = Counter(bigrams)
+            insights["top_title_words"] = [phrase for phrase, count in bigram_counter.most_common(10)]
 
     return insights
+
+@st.cache_data
+def get_model_stats(df_clean):
+    try:
+        # load stored model metrics
+        rmse, r2, mae, top_features = fit_model(df_clean)
+
+        return {
+            "rmse": rmse,
+            "r2": r2,
+            "mae": mae,
+            "top_features": top_features
+        }
+    except Exception as e:
+        st.error(f"Error {e}")
+        return
+
 
 # streamlit app
 def main():
@@ -93,7 +119,7 @@ def main():
         return
     
     # create tabs
-    tab1, tab2 = st.tabs(["Price Estimator", "Market Insights"])
+    tab1, tab2, tab3 = st.tabs(["Price Estimator", "Market Insights", "Model Statistics"])
 
     with tab1:
         st.header("Estimate your rental price")
@@ -207,6 +233,10 @@ def main():
                 if title_keywords:
                     st.subheader("Suggested title keywords:")
                     st.info(f"{', '.join(title_keywords)}")
+                else:
+                    generic_title_keywords = get_competetive_insights(df_clean)["top_title_words"]
+                    st.subheader("Suggested title keywords:")
+                    st.info(f"{', '.join(generic_title_keywords)}")
 
 
 
@@ -257,6 +287,47 @@ def main():
 
         # simple bar chart
         st.bar_chart(room_type_prices)
+    
+    with tab3:
+        st.header("Model Statistics")
+        st.write("Examine how well our price prediction model performs and which features are most important.")
+        
+        # get model stats
+        model_stats = get_model_stats(df_clean)
+
+        # display metrics
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            st.metric(
+                label="RMSE (Root Mean Square Error)",
+                value=f"{model_stats['rmse']:.2f} SEK",
+                help="Average prediction error. Lower values indicate better accuracy."
+            )
+
+        with col2:
+            st.metric(
+                label="R² Score",
+                value=f"{model_stats['r2']:.4f}",
+                help="Proportion of variance explained by the model. Higher values (closer to 1) indicate better fit."
+            )
+        with col3:
+            st.metric(
+                label="MAE (Mean Absolute Error)",
+                value=f"{model_stats['mae']:.2f} SEK",
+                help="Average absolute error. Lower values indicate better accuracy."
+            )
+        
+        if model_stats and "top_features" in model_stats:
+            top_features_df = model_stats["top_features"]
+
+            st.subheader("Top features used in the model")
+            top_features_df.insert(0, "Number", range(1, len(top_features_df) + 1))
+
+            st.table(top_features_df[["Number", "Feature", "Importance"]])
+        else:
+            st.warning("Top features data not avilable")
+        
 
 
 if __name__ == "__main__":

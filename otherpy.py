@@ -8,7 +8,7 @@ import unicodedata
 import ast
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import mean_squared_error, r2_score 
+from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 from sklearn.impute import SimpleImputer
@@ -17,7 +17,7 @@ from geopy.geocoders import Nominatim
 import pickle 
 from collections import Counter
 import time
-from collections import Counter
+from nltk.util import ngrams
 
 NORMALIZATION_RULES = [
 
@@ -80,28 +80,12 @@ def clean_data(df):
     # convert price $ to numeric
     df_clean["price"] = df_clean["price"].replace("[\$,]", "", regex=True).astype(float)
     
-
-    print(df_clean["price"].describe())
-
     # remove extreme outliers in price
-    q1_price = df_clean["price"].quantile(0.05)
-    q3_price = df_clean["price"].quantile(0.95)
-    iqr_price = q3_price - q1_price
-
-    df_clean = df_clean[(df_clean["price"] >= max(0, q1_price - 1.5 * iqr_price)) & (df_clean["price"] <= q3_price + 1.5 * iqr_price)]
-    print("\nPrice statistics after outlier removal:")
-    print(df_clean["price"].describe())
+    df_clean = df_clean[(df_clean["price"] >= df_clean["price"].quantile(0.05)) & (df_clean["price"] <= df_clean["price"].quantile(0.95))]
 
     # handle minimum_nights outliers
-    q1_night = df_clean["minimum_nights"].quantile(0.01)
-    q3_night = df_clean["minimum_nights"].quantile(0.99)
-    iqr_night = q3_night - q1_night
+    df_clean = df_clean[(df_clean["minimum_nights"] >= 1) & (df_clean["minimum_nights"] <= df_clean["minimum_nights"].quantile(0.99))]
 
-    df_clean = df_clean[(df_clean["minimum_nights"] >= max(1, q1_night - 1.5 * iqr_night)) & (df_clean["minimum_nights"] <= q3_night + 1.5 * iqr_night)]
-
-    print("\nMinimum nights statistics after outlier removal:")
-    print(df_clean["minimum_nights"].describe())
-    
     # handle missing values for numerical columns
     numeric_cols = ["bathrooms", "bedrooms", "beds", "accommodates", "minimum_nights"]
     for col in numeric_cols:
@@ -131,10 +115,14 @@ def clean_data(df):
     
     # add review score features
     review_score_cols = [
-        "review_scores_rating", "review_scores_accuracy", "review_scores_cleanliness",
-        "review_scores_checkin", "review_scores_communication", "review_scores_location", 
-        "review_scores_value"
+        "review_scores_rating", "review_scores_cleanliness",
+        "review_scores_location", "review_scores_value"
     ]
+
+    if all(col in df_clean.columns for col in review_score_cols):
+        df_clean["avg_review_score"] = df_clean[review_score_cols].mean(axis=1)
+        if "review_scores_location" in df_clean.columns and "review_scores_rating" in df_clean.columns:
+            df_clean["location_premium"] = df_clean["review_scores_location"] - df_clean["review_scores_rating"]
 
     for col in review_score_cols:
         if col in df_clean.columns:
@@ -144,21 +132,24 @@ def clean_data(df):
     if "host_is_superhost" in df_clean.columns:
         df_clean["host_is_superhost_num"] = df_clean["host_is_superhost"].apply(lambda x: 1 if x == "t" else 0)
 
+
+    if "latitude" in df_clean.columns and "longitude" in df_clean.columns:
+        stockholm_center = (59.3293, 18.0686)
+        df_clean["dist_to_center"] = ((df_clean["latitude"] - stockholm_center[0])**2 + (df_clean["longitude"] - stockholm_center[1])**2)**0.5
+
+    if "availability_365" in df_clean.columns:
+        df_clean["availability_rate"] = df_clean["availability_365"] / 365
+        df_clean["scarcity"] = 1 - df_clean["availability_rate"]
+
     # check if instant bookable
     if "instant_bookable" in df_clean.columns:
         df_clean["instant_bookable_num"] = df_clean["instant_bookable"].apply(lambda x: 1 if x == "t" else 0)
-
-    # add review count and frequency features
-    if "number_of_reviews" in df_clean.columns:
-        df_clean["number_of_reviews"] = df_clean["number_of_reviews"].fillna(0)
-        df_clean["has_reviews"] = df_clean["number_of_reviews"].apply(lambda x: 1 if x > 0 else 0)
 
     if "reviews_per_month" in df_clean.columns:
         df_clean["reviews_per_monthn"] = df_clean["reviews_per_month"].fillna(0)
 
     df_clean["num_amenities"] = df_clean["amenities"].apply(lambda x: len(ast.literal_eval(x)))
 
-    print(df_clean.shape)
 
     return df_clean
 
@@ -214,11 +205,14 @@ def create_transformer():
     clean_norm = FunctionTransformer(parse_clean_and_normalize, validate=False)
     
     categorical_features = ["neighbourhood", "room_type"]
-    numerical_features = ["latitude", "longitude", "bedrooms", "accommodates", "bathrooms", "beds", "minimum_nights"]
+    numerical_features = [
+        "latitude", "longitude", "bedrooms", "accommodates", "bathrooms", 
+        "beds", "minimum_nights", "avg_review_score", "location_premium", "scarcity", "dist_to_center"
+    ]
     
     amenities_pipeline = Pipeline([
     ("clean_norm", clean_norm),
-    ("topk_binarize", TopKMultiLabelBinarizer(top_k=50))
+    ("topk_binarize", TopKMultiLabelBinarizer(top_k=30))
     ])
 
     categorical_pipeline = Pipeline([
@@ -242,9 +236,21 @@ def create_transformer():
     return preprocessor
 
 def fit_model(df_clean):
+    preprocessor = create_transformer()
+
     model_pipeline = Pipeline([
         ("preprocessing", preprocessor),
-        ("regressor", RandomForestRegressor(n_estimators=100, random_state=42))
+        ("regressor", RandomForestRegressor(
+            n_estimators=400,
+            max_depth=30,
+            min_samples_split=2,
+            min_samples_leaf=1,
+            max_features="sqrt",
+            bootstrap=True,
+            n_jobs=-1,
+            random_state=42
+            
+            ))
     ])
     
     if df_clean is None:
@@ -268,8 +274,50 @@ def fit_model(df_clean):
     # Evaluate
     rmse = np.sqrt(mean_squared_error(y_test, y_pred))
     r2 = r2_score(y_test, y_pred)
+    mae = mean_absolute_error(y_test, y_pred)
     
-    return rmse, r2
+    if hasattr(model_pipeline.named_steps["regressor"], "feature_importances_"):
+        feature_names = []
+        # Get feature names from all transformers
+        for name, transformer, columns in preprocessor.transformers_:
+            if name == "cat":
+                # For categorical columns, get the one-hot encoded feature names
+                encoder = transformer.named_steps["onehot"]
+                cat_feature_names = encoder.get_feature_names_out(columns)
+                feature_names.extend(cat_feature_names)
+            elif name == "amenities":
+                # For amenities, get the binary feature names
+                binarizer = transformer.named_steps["topk_binarize"]
+                amenity_feature_names = binarizer.get_feature_names_out()
+                feature_names.extend(amenity_feature_names)
+            elif name == "num":
+                # For numerical columns, use the column names
+                feature_names.extend(columns)
+            elif name == "num_amenities":
+                # For passthrough features, use the column names
+                feature_names.extend(columns)
+        
+        # Get feature importances
+        importances = model_pipeline.named_steps["regressor"].feature_importances_
+        
+        # Create a DataFrame of feature importances
+        feature_importance = pd.DataFrame({
+            'Feature': feature_names[:len(importances)],  # Match length to importances
+            'Importance': importances
+        })
+        
+        # Sort by importance
+        feature_importance = feature_importance.sort_values('Importance', ascending=False)
+        
+        # Save top 20 features
+        top_features = feature_importance.head(20)
+        # top_features.to_csv("top_features.csv", index=False)
+        
+        # print("\nTop 10 Important Features:")
+        # print(top_features.head(10))
+
+
+    return rmse, r2, mae, top_features
 
 
 def load_model():
@@ -277,22 +325,19 @@ def load_model():
         loaded_model = pickle.load(f)
     return loaded_model
 
-preprocessor = create_transformer()
+
 
 
 df = load_data()
 df_clean = clean_data(df)
-rmse, r2 = fit_model(df_clean)
+rmse, r2, mae, top_features = fit_model(df_clean)
 
 print(f"RMSE: {rmse:.2f}")
 print(f"R²: {r2:.4f}")
+print(f"MAE: {mae:.4f}")
 # train = train_price_model(df_clean)
 # advanced print with the train_price_model
 
-# # To get cleaned amenity names:
-# feature_names = preprocessor.named_transformers_["amenities"].named_steps["topk_binarize"].get_feature_names_out()
-# #print("Feature names:", feature_names)
-# print(X_transformed)
 
 
 #address format(string): Street Address, Neighborhood, City, Country
@@ -315,7 +360,6 @@ def get_top_neighbourhoods(df_clean ,n):
     top_neighbourhoods = top_neighbourhoods[top_neighbourhoods["count"] > 10]
     return top_neighbourhoods.sort_values("mean", ascending=False).head(n)
 
-print(get_top_neighbourhoods(df_clean, 5))
 
 def get_top_amenities(df_clean, n):
     """get top n amenities"""
@@ -330,34 +374,37 @@ def get_top_amenities(df_clean, n):
     amenity_counts = Counter(all_amenities)
     top_amenities = amenity_counts.most_common(n)
 
-    # convert to dataframe
+    
     top_amenities_df = pd.DataFrame(top_amenities, columns=["Amenity", "Count"])
 
     return top_amenities_df
 
-print(get_top_amenities(df_clean, 10))
 
 
-def get_dynamic_title_tips(df, neighborhood, room_type):
+def get_dynamic_title_tips(df, neighborhood, room_type, ngram_size=2, top_n=5):
     # Filter listings based on neighborhood and room type
     similar = df[
         (df["neighbourhood_cleansed"] == neighborhood + "s") &
         (df["room_type"] == room_type) &
-        (df["review_scores_rating"] >= 4.8)
+        (df["review_scores_rating"] >= 4.5)  # lower threshold for more results
     ]
 
-    print(similar)
     if len(similar) < 5:
         return []
 
     titles = " ".join(similar["name"].fillna("").astype(str)).lower()
     words = re.findall(r"\b[a-z]{3,}\b", titles)
 
+    # Optional: remove stopwords
     stop_words = {"and", "the", "with", "for", "from", "this", "that", "have", "has", "och", "med", "på", "för"}
-    filtered = [w for w in words if w not in stop_words]
+    filtered_words = [w for w in words if w not in stop_words]
 
-    most_common = [w for w, count in Counter(filtered).most_common(5)]
-    return most_common
+    # Generate n-grams (e.g., bigrams if ngram_size=2)
+    n_grams = ngrams(filtered_words, ngram_size)
+    phrase_counter = Counter([" ".join(gram) for gram in n_grams])
+
+    # Return most common phrases
+    return [phrase for phrase, count in phrase_counter.most_common(top_n)]
 
 
 def predict_price(features_dict):
@@ -391,11 +438,12 @@ def predict_price(features_dict):
         # calc number of amenities
         features_dict_copy["num_amenities"] = len(ast.literal_eval(features_dict_copy["amenities"]) if isinstance(features_dict_copy["amenities"], str) else features_dict_copy["amenities"])
         
+
         df_features = pd.DataFrame([features_dict_copy])
 
         # make sure all required columns are present
         required_cols = ["neighbourhood", "room_type", "latitude", "longitude", 
-                        "bedrooms", "accommodates", "bathrooms", "beds", "minimum_nights", "amenities", "num_amenities"]
+                        "bedrooms", "accommodates", "bathrooms", "beds", "minimum_nights", "amenities", "num_amenities", "dist_to_center", "location_premium", "avg_review_score", "scarcity"]
         
         df_clean = clean_data(load_data())
         
@@ -410,6 +458,8 @@ def predict_price(features_dict):
                     # fill categorical columns with most frequent values
                     df_features[col] = df_clean[col].mode().iloc[0]
         
+
+
         # make prediciton
         predict_price = model.predict(df_features)[0]
 
@@ -417,24 +467,3 @@ def predict_price(features_dict):
     except Exception as e:
         print(f"Error in prediction: {e}")
         return None
-
-# sample_features = {
-#     "neighbourhood": "Södermalms",
-#         "room_type": "Private room",
-#         "latitude": 59.31389,
-#         "longitude": 18.06087,
-#         "bedrooms": 1,
-#         "accommodates": 2,
-#         "bathrooms": 1.0,
-#         "beds": 1,
-#         "amenities": ["Hair dryer", "Hangers", "Long term stays allowed", "Host greets you", "Bathtub",
-#                        "Luggage dropoff allowed", "Iron", "Essentials", "Free washer \u2013 In building",
-#                         "Elevator", "Free dryer \u2013 In building", "Courtyard view", "Smoke alarm", "TV",
-#                         "Garden view", "Dishes and silverware", "Shared backyard \u2013 Not fully fenced",
-#                         "Outdoor playground", "Heating", "Hot water", "Shampoo", "Bed linens", 
-#                         "Extra pillows and blankets", "Lock on bedroom door", "Fast wifi \u2013 399 Mbps",
-#                         "Park view", "Refrigerator", "Microwave", "Coffee maker"],
-#         "num_amenities": len(sample_features["amenities"])
-# }
-# predicted_price = predict_price(sample_features)
-# print(f"Predicted price: ${predicted_price} per night")
