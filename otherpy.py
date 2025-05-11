@@ -8,8 +8,8 @@ from sklearn.base import BaseEstimator, TransformerMixin
 import unicodedata
 import ast
 from sklearn.ensemble import RandomForestRegressor
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
+from sklearn.model_selection import train_test_split,GridSearchCV
+from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error,make_scorer,root_mean_squared_error
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 from sklearn.experimental import enable_iterative_imputer
@@ -23,79 +23,58 @@ from nltk.util import ngrams
 
 NORMALIZATION_RULES = [
 
-    # Climate Control
-(re.compile(r"\b(air conditioning|central air conditioning|portable air conditioning)\b", re.I), "air conditioning"),
-(re.compile(r"\b(heating|central heating|radiant heating)\b", re.I), "heating"),
-(re.compile(r"\bsplit type ductless system\b", re.I), "ductless system"),
+    (re.compile(r"\b(air conditioning|central air conditioning|portable air conditioning)\b", re.I), "air conditioning"),
+    (re.compile(r"\b(heating|central heating|radiant heating|split type ductless system)\b", re.I), "heating"),
+    (re.compile(r"\b(hot water kettle|coffee( maker)?|bread maker|rice maker|toaster|blender)\b", re.I), "kitchen appliance"),
+    (re.compile(r"\bmicrowave( oven)?\b", re.I), "microwave"),
+    (re.compile(r"\bfreezer\b", re.I), "freezer"),
+    (re.compile(r"\b(refrigerator|mini fridge|smeg refrigerator|siemens refrigerator|electrolux refrigerator)\b", re.I), "refrigerator"),
+    (re.compile(r"\b(dishwasher|oven|stove|electric stove|induction stove|gas stove)\b", re.I), "cooking appliance"),
+    (re.compile(r"\bclothing storage\b", re.I), "clothing storage"),
 
-# Kitchen Appliances (Split finer)
-(re.compile(r"\b(hot water kettle|electric kettle)\b", re.I), "kettle"),
-(re.compile(r"\bcoffee( maker)?\b", re.I), "coffee maker"),
-(re.compile(r"\bbread maker\b", re.I), "bread maker"),
-(re.compile(r"\brice maker\b", re.I), "rice maker"),
-(re.compile(r"\btoaster\b", re.I), "toaster"),
-(re.compile(r"\bblender\b", re.I), "blender"),
-(re.compile(r"\bmicrowave( oven)?\b", re.I), "microwave"),
-(re.compile(r"\bfreezer\b", re.I), "freezer"),
-(re.compile(r"\b(refrigerator|mini fridge|smeg refrigerator|siemens refrigerator|electrolux refrigerator)\b", re.I), "refrigerator"),
-(re.compile(r"\b(dishwasher)\b", re.I), "dishwasher"),
-(re.compile(r"\b(oven|stove|electric stove|induction stove|gas stove)\b", re.I), "stove/oven"),
 
-# Storage and Laundry
-(re.compile(r"\bclothing storage\b", re.I), "clothing storage"),
-(re.compile(r"\b(washing machine|washer)\b", re.I), "washing machine"),
-(re.compile(r"\b(dryer)\b", re.I), "dryer"),
-(re.compile(r"\blaundromat\b", re.I), "laundromat"),
+    (re.compile(r"\b(shower gel|body soap|shampoo|conditioner|bidet)\b", re.I), "bathroom essentials"),
+    (re.compile(r"\b(bathroom|bathtub|baby bath|hot tub)\b", re.I), "bathroom"),
+    (re.compile(r"\b(towels|beach towels|pool towels)\b", re.I), "towels"),
+    (re.compile(r"\b(washing machine|washer|dryer|laundromat)\b", re.I), "laundry"),
+    (re.compile(r"\b(iron|ironing board|clothes steamer)\b", re.I), "ironing equipment"),
+    (re.compile(r"\b(hair dryer|hair straightener|hair curler)\b", re.I), "hair dryer"),
 
-# Bathroom
-(re.compile(r"\b(shower gel|body soap|shampoo|conditioner)\b", re.I), "bathroom toiletries"),
-(re.compile(r"\bbidet\b", re.I), "bidet"),
-(re.compile(r"\b(bathtub|baby bath|hot tub)\b", re.I), "bathtub / hot tub"),
-(re.compile(r"\bbathroom\b", re.I), "bathroom"),
-(re.compile(r"\b(towels|beach towels|pool towels)\b", re.I), "towels"),
+    (re.compile(r"\b(crib|pack n play|travel crib)\b", re.I), "crib / pack n play"),
+    (re.compile(r"\bchanging table\b", re.I), "changing table"),
+    (re.compile(r"\bhigh chair\b", re.I), "high chair"),
+    (re.compile(r"\b(baby safety gates|outlet covers|baby monitor)\b", re.I), "child safety"),
+    (re.compile(r"\b(children’s books and toys|books and reading material|board games|arcade games|life size games)\b", re.I), "kids’ entertainment"),
 
-# Cleaning & Grooming
-(re.compile(r"\b(iron|ironing board|clothes steamer)\b", re.I), "ironing equipment"),
-(re.compile(r"\b(hair dryer|hair straightener|hair curler)\b", re.I), "hair appliances"),
 
-# Baby/Kids
-(re.compile(r"\b(crib|pack n play|travel crib)\b", re.I), "crib"),
-(re.compile(r"\bchanging table\b", re.I), "changing table"),
-(re.compile(r"\bhigh chair\b", re.I), "high chair"),
-(re.compile(r"\b(baby safety gates|outlet covers|baby monitor)\b", re.I), "baby safety"),
-(re.compile(r"\b(children’s books and toys|books and reading material|board games|arcade games|life size games)\b", re.I), "children entertainment"),
+    (re.compile(r"\b(tv|hdtv)\b", re.I), "tv"),
+    (re.compile(r"\b(sound system|bluetooth sound system|sonos|audiopro)\b", re.I), "sound system"),
+    (re.compile(r"\b(game console|ps4|ping pong table|pool table|movie theater)\b", re.I), "entertainment"),
+    (re.compile(r"\b(pocket wifi|ethernet connection|wifi)\b", re.I), "wifi / internet"),
+    (re.compile(r"\b(airplay|chromecast|hbo max|apple tv|netflix|hulu|disney\+|amazon prime video)\b", re.I), "streaming services"),
+    (re.compile(r"\b(ev charger|electric vehicle charger|charging station)\b", re.I), "ev charger"),
 
-# Entertainment
-(re.compile(r"\b(tv|hdtv)\b", re.I), "tv"),
-(re.compile(r"\b(sound system|bluetooth sound system|sonos|audiopro)\b", re.I), "sound system"),
-(re.compile(r"\b(game console|ps4|ping pong table|pool table|movie theater)\b", re.I), "game or media equipment"),
-(re.compile(r"\b(pocket wifi|ethernet connection|wifi)\b", re.I), "internet"),
-(re.compile(r"\b(airplay|chromecast|hbo max|apple tv|netflix|hulu|disney\+|amazon prime video)\b", re.I), "streaming"),
 
-# Outdoors
-(re.compile(r"\b(pool)\b", re.I), "pool"),
-(re.compile(r"\b(hot tub)\b", re.I), "hot tub"),
-(re.compile(r"\b(barbecue utensils|bbq grill)\b", re.I), "bbq"),
-(re.compile(r"\b(outdoor kitchen|outdoor dining area)\b", re.I), "outdoor kitchen"),
-(re.compile(r"\b(backyard|patio|balcony|garden view|park view|beach view|bay view|canal view|courtyard view|city skyline view|lake view|waterfront|ski-in/ski-out)\b", re.I), "outdoor view"),
+    (re.compile(r"\b(pool|hot tub)\b", re.I), "pool / hot tub"),
+    (re.compile(r"\b(barbecue utensils|bbq grill)\b", re.I), "bbq grill"),
+    (re.compile(r"\b(outdoor.*|backyard|patio|balcony|garden view|park view|beach view|bay view|canal view|courtyard view|city skyline view|lake view|waterfront|ski-in/ski-out)\b", re.I), "outdoor / view"),
+    (re.compile(r"\b(outdoor kitchen|outdoor dining area)\b", re.I), "outdoor kitchen"),
 
-# Transportation
-(re.compile(r"\b(parking|driveway parking|street parking|paid parking|carport)\b", re.I), "parking"),
-(re.compile(r"\b(bike storage|bike rack|bike parking)\b", re.I), "bike storage"),
-(re.compile(r"\b(car rental|car service)\b", re.I), "car rental"),
-(re.compile(r"\bgarage\b", re.I), "garage"),
 
-# Safety & Access
-(re.compile(r"\b(lockbox|smart lock|keypad)\b", re.I), "keyless entry"),
-(re.compile(r"\b(smoke alarm|carbon monoxide alarm|fire extinguisher|first aid kit)\b", re.I), "safety equipment"),
-(re.compile(r"\b(security cameras|security system|security patrol)\b", re.I), "security"),
+    (re.compile(r"\b(parking|driveway parking|street parking|paid parking|carport)\b", re.I), "parking"),
+    (re.compile(r"\b(bike storage|bike rack|bike parking)\b", re.I), "bike storage"),
+    (re.compile(r"\b(car rental|car service|car|vehicle)\b", re.I), "car rental"),
+    (re.compile(r"\bgarage\b", re.I), "garage"),
 
-# Services and Extras
-(re.compile(r"\b(elevator|self check-in|host greets you|building staff)\b", re.I), "guest access / support"),
-(re.compile(r"\b(cleaning service|housekeeping)\b", re.I), "cleaning service"),
-(re.compile(r"\b(exercise equipment|gym)\b", re.I), "fitness equipment"),
-(re.compile(r"\bev charger\b", re.I), "ev charger"),
 
+    (re.compile(r"\b(lock(box)?|smart lock|keypad)\b", re.I), "secure entry"),
+    (re.compile(r"\b(smoke alarm|carbon monoxide alarm|fire extinguisher|first aid kit)\b", re.I), "safety equipment"),
+    (re.compile(r"\b(security cameras|security system|security patrol)\b", re.I), "security system"),
+
+
+    (re.compile(r"\b(elevator|self check-in|host greets you|building staff)\b", re.I), "guest support"),
+    (re.compile(r"\b(cleaning|housekeeping)\b", re.I), "cleaning services"),
+    (re.compile(r"\b(exercise equipment|gym)\b", re.I), "fitness equipment"),
 ]
 def clean_data(df):
 
@@ -125,16 +104,16 @@ def clean_data(df):
     df_clean["is_hotel_room"] = df_clean["room_type"].apply(lambda x:1 if x == "Hotel room" else 0)
     df_clean["is_shared_room"] = df_clean["room_type"].apply(lambda x:1 if x == "Shared room" else 0)
 
-    # create title and description features
-    # if "name" in df_clean.columns:
-    #     df_clean["name"] = df_clean["name"].fillna("")
-    #     df_clean["title_word_count"] = df_clean["name"].fillna("").apply(lambda x:len(str(x).split()))
-    #     df_clean["title_length"] = df_clean["name"].fillna("").apply(len)
 
-    # if "description" in df_clean.columns:
-    #     df_clean["description"] = df_clean["description"].fillna("")
-    #     df_clean["description_word_count"] = df_clean["description"].fillna("").apply(lambda x: len(str(x).split()))
-    #     df_clean["description_length"] = df_clean["description"].fillna("").apply(len)
+    if "name" in df_clean.columns:
+        df_clean["name"] = df_clean["name"].fillna("")
+        df_clean["title_word_count"] = df_clean["name"].fillna("").apply(lambda x:len(str(x).split()))
+        df_clean["title_length"] = df_clean["name"].fillna("").apply(len)
+
+    if "description" in df_clean.columns:
+        df_clean["description"] = df_clean["description"].fillna("")
+        df_clean["description_word_count"] = df_clean["description"].fillna("").apply(lambda x: len(str(x).split()))
+        df_clean["description_length"] = df_clean["description"].fillna("").apply(len)
 
     # add review score features
     review_score_cols = [
@@ -153,7 +132,7 @@ def clean_data(df):
 
     # # superhost feature
     # if "host_is_superhost" in df_clean.columns:
-    #     df_clean["host_is_superhost_num"] = df_clean["host_is_superhost"].apply(lambda x: 1 if x == "t" else 0)
+        df_clean["host_is_superhost_num"] = df_clean["host_is_superhost"].apply(lambda x: 1 if x == "t" else 0)
 
 
     if "latitude" in df_clean.columns and "longitude" in df_clean.columns:
@@ -227,11 +206,11 @@ def clip_outliers(X):
     lower = np.quantile(X, 0.01, axis=0)
     upper = np.quantile(X, 0.99, axis=0)
     return np.clip(X, lower, upper)
-mean_imputer = SimpleImputer(strategy='mean')
-median_imputer = SimpleImputer(strategy='median')
-iterative_imputer = IterativeImputer(random_state=0)
-standard_scaler = StandardScaler()
-minmax_scaler = MinMaxScaler()
+# mean_imputer = SimpleImputer(strategy='mean')
+# median_imputer = SimpleImputer(strategy='median')
+# iterative_imputer = IterativeImputer(random_state=0)
+# standard_scaler = StandardScaler()
+# minmax_scaler = MinMaxScaler()
 def create_transformer():
     clean_norm = FunctionTransformer(parse_clean_and_normalize, validate=False)
 
@@ -248,11 +227,11 @@ def create_transformer():
 
     categorical_pipeline = Pipeline([
         ("imputer", SimpleImputer(strategy="most_frequent")),
-        ("ordinal", OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1))
+        ("onehot",OneHotEncoder(handle_unknown="ignore") )
     ])
 
     numerical_pipeline = Pipeline([
-        ("imputer", IterativeImputer(random_state=0)),
+        ("imputer", SimpleImputer(strategy="mean")),
         ('outlier_clip', FunctionTransformer(clip_outliers, validate=False)),
         ("scaler", StandardScaler())
     ])
@@ -270,6 +249,27 @@ def create_transformer():
 def fit_model(df_clean):
     preprocessor = create_transformer()
 
+
+    param_grid = [{
+    'regressor__n_estimators': [400],
+    'regressor__max_depth': [30],
+    'regressor__min_samples_split': [2],
+    'regressor__min_samples_leaf': [1],
+    'regressor__max_features': ['sqrt'],
+    'regressor__bootstrap': [False],
+    'regressor__random_state': [42],
+    'preprocessing__amenities__topk_binarize__top_k': [30],
+    }
+    # ,{
+    #     'regressor': [HistGradientBoostingRegressor()],
+    #     'regressor__max_iter': [100, 200],
+    #     'regressor__learning_rate': [0.05, 0.1],
+    #     'regressor__max_depth': [None, 10],
+    #     'preprocessing__amenities__topk_binarize__top_k': [50, 70],
+    #     'preprocessing__num__imputer': [SimpleImputer()],
+    #     'preprocessing__num__scaler': [StandardScaler()]
+    # }
+    ]
     model_pipeline = Pipeline([
         ("preprocessing", preprocessor),
         ("regressor", RandomForestRegressor(
@@ -284,14 +284,21 @@ def fit_model(df_clean):
 
             ))
     ])
+    scoring = {
+    'rmse': make_scorer(lambda y_true, y_pred: -root_mean_squared_error(y_true, y_pred), greater_is_better=False),
+    'r2': 'r2',
+    'mae': make_scorer(mean_absolute_error, greater_is_better=False)
+}
     grid_search = GridSearchCV(
     model_pipeline,  # your pipeline
     param_grid=param_grid,
-    cv=5,  # 5-fold cross-validation
-    scoring='neg_root_mean_squared_error',  # or 'r2', etc.
-    n_jobs=-1,  # use all CPU cores
+    cv=5,
+    scoring=scoring,
+    refit="r2",
+    n_jobs=-1,
     verbose=1
-)
+    )
+
     if df_clean is None:
         return
 
@@ -302,24 +309,20 @@ def fit_model(df_clean):
     grid_search.fit(x_train, y_train)
     best_model = grid_search.best_estimator_
     # model_pipeline.fit(x_train, y_train)
-    # with open("my_model.pkl", "wb") as f:
-    #     pickle.dump(best_model  , f, protocol=5)
+    with open("my_model.pkl", "wb") as f:
+        pickle.dump(best_model  , f, protocol=5)
 
     y_pred = best_model.predict(x_test)
     rmse = np.sqrt(mean_squared_error(y_test, y_pred))
     r2 = r2_score(y_test, y_pred)
 
-
-
-    # Evaluate
-    rmse = np.sqrt(mean_squared_error(y_test, y_pred))
-    r2 = r2_score(y_test, y_pred)
     mae = mean_absolute_error(y_test, y_pred)
-
-    if hasattr(model_pipeline.named_steps["regressor"], "feature_importances_"):
+    top_features = pd.DataFrame()
+    if hasattr(best_model.named_steps["regressor"], "feature_importances_"):
         feature_names = []
+        fitted_preprocessor = best_model.named_steps["preprocessing"]
         # Get feature names from all transformers
-        for name, transformer, columns in preprocessor.transformers_:
+        for name, transformer, columns in fitted_preprocessor.transformers_:
             if name == "cat":
                 # For categorical columns, get the one-hot encoded feature names
                 encoder = transformer.named_steps["onehot"]
@@ -338,7 +341,7 @@ def fit_model(df_clean):
                 feature_names.extend(columns)
 
         # Get feature importances
-        importances = model_pipeline.named_steps["regressor"].feature_importances_
+        importances = best_model.named_steps["regressor"].feature_importances_
 
         # Create a DataFrame of feature importances
         feature_importance = pd.DataFrame({
@@ -369,13 +372,7 @@ def load_model():
 
 
 
-df = load_data()
-df_clean = clean_data(df)
-rmse, r2, mae, top_features = fit_model(df_clean)
 
-print(f"RMSE: {rmse:.2f}")
-print(f"R²: {r2:.4f}")
-print(f"MAE: {mae:.4f}")
 # train = train_price_model(df_clean)
 # advanced print with the train_price_model
 
@@ -508,3 +505,11 @@ def predict_price(features_dict):
     except Exception as e:
         print(f"Error in prediction: {e}")
         return None
+if __name__ == "__main__":
+    df = load_data()
+    df_clean = clean_data(df)
+    rmse, r2, mae, top_features = fit_model(df_clean)
+
+    print(f"RMSE: {rmse:.2f}")
+    print(f"R²: {r2:.4f}")
+    print(f"MAE: {mae:.4f}")

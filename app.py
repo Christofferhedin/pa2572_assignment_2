@@ -1,5 +1,5 @@
 import streamlit as st
-from otherpy import predict_price, load_model, load_data, clean_data, get_top_amenities, get_lat_long_from_address, normalize_amenity, get_dynamic_title_tips, fit_model
+from otherpy import predict_price, load_model, load_data, clean_data, get_top_amenities, get_lat_long_from_address, normalize_amenity, get_dynamic_title_tips, fit_model,parse_clean_and_normalize,TopKMultiLabelBinarizer,clip_outliers
 from collections import Counter
 import re
 import ast
@@ -66,12 +66,12 @@ def get_competetive_insights(df_clean):
         # common words in titels
         if "name" in top_rated.columns:
             all_title_text = " ".join(top_rated["name"].fillna("").astype(str)).lower()
-            
+
             # Tokenize
             words = re.findall(r"\b[a-z]{3,}\b", all_title_text)
-            
+
             # Define stop words
-            stop_words = {"and", "the", "with", "for", "from", "this", "that", "have", "has", 
+            stop_words = {"and", "the", "with", "for", "from", "this", "that", "have", "has",
                         "och", "med", "på", "för", "ett", "en", "det", "av"}
 
             # Create bigrams
@@ -117,7 +117,7 @@ def main():
     except Exception as e:
         st.error(f"Error loading data or model: {e}")
         return
-    
+
     # create tabs
     tab1, tab2, tab3 = st.tabs(["Price Estimator", "Market Insights", "Model Statistics"])
 
@@ -132,7 +132,7 @@ def main():
             address = st.text_input("Address", "Götgatan 14, Stockholm, Sweden")
             neighborhood = st.text_input("Neighborhood")
             use_address = st.checkbox("Use address for location", value=True)
-        
+
         with col2:
             if use_address:
                 lat, lng = get_lat_long_from_address(address)
@@ -163,7 +163,7 @@ def main():
             )
             bedrooms = st.number_input("Number of bedrooms", min_value=0, value=1)
             beds = st.number_input("Number of beds", min_value=1, value=1)
-        
+
         with col2:
             accommodates = st.number_input("Maximum guests", min_value=1, value=2)
             bathrooms = st.number_input("Number of bathrooms", min_value=0.5, value=1.0, step=0.5)
@@ -183,7 +183,7 @@ def main():
             col_idx = i % 3
             if cols[col_idx].checkbox(amenity, value=(amenity in ["wifi / internet", "heating", "tv"])):
                 selected_amenities.append(amenity)
-        
+
         # other amenities
         other_amenity = st.text_input("Add other amenity (Enter to add)")
         if other_amenity and other_amenity not in selected_amenities:
@@ -268,7 +268,7 @@ def main():
         if "top_amenities" in insights:
             for amenity in insights["top_amenities"][:10]:
                 st.write(f"- {amenity}")
-        
+
         # Title and description tips
         st.subheader("Tips for lisiting title and description")
         if "top_title_words" in insights:
@@ -287,11 +287,11 @@ def main():
 
         # simple bar chart
         st.bar_chart(room_type_prices)
-    
+
     with tab3:
         st.header("Model Statistics")
         st.write("Examine how well our price prediction model performs and which features are most important.")
-        
+
         # get model stats
         model_stats = get_model_stats(df_clean)
 
@@ -317,7 +317,7 @@ def main():
                 value=f"{model_stats['mae']:.2f} SEK",
                 help="Average absolute error. Lower values indicate better accuracy."
             )
-        
+
         if model_stats and "top_features" in model_stats:
             top_features_df = model_stats["top_features"]
 
@@ -327,7 +327,7 @@ def main():
             st.table(top_features_df[["Number", "Feature", "Importance"]])
         else:
             st.warning("Top features data not avilable")
-        
+
 
 
 if __name__ == "__main__":
