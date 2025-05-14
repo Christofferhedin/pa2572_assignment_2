@@ -5,6 +5,7 @@ import re
 import ast
 import json
 import pandas as pd
+import matplotlib.pyplot as plt
 from geopy.geocoders import Nominatim
 
 
@@ -89,6 +90,7 @@ def get_competetive_insights(df_clean):
 
 @st.cache_data
 def get_model_stats(df_clean):
+    """Returns Rmse score, r^2 score, mae score and top fe"""
     try:
         # load stored model metrics
         rmse, r2, mae, top_features = fit_model(df_clean)
@@ -101,8 +103,44 @@ def get_model_stats(df_clean):
         }
     except Exception as e:
         st.error(f"Error {e}")
-        return
+        return None
 
+def create_prediction_vs_actual_plot():
+    df, df_clean = load_cached_data()
+    model = load_cached_model()
+
+    # subset of data for visualization
+    sample_size = min(1000, len(df_clean))
+    sample_df = df_clean.sample(n=sample_size, random_state=42)
+
+    x = sample_df.drop(columns=["price"])
+    y_actual = sample_df["price"]
+
+    try:
+        y_pred = model.predict(x)
+        
+        results_df = pd.DataFrame({
+            "Actual": y_actual,
+            "Predicted": y_pred
+        })
+
+        # create the plot
+        fig, ax = plt.subplots(figsize=(10, 6))
+
+        ax.scatter(results_df["Actual"], results_df["Predicted"], alpha=0.5)
+
+        max_val = max(results_df["Actual"].max(), results_df["Predicted"].max())
+        min_val = min(results_df["Actual"].min(), results_df["Predicted"].min())
+        ax.plot([min_val, max_val], [min_val, max_val], "r--")
+
+        ax.set_xlabel("Actual price (SEK)")
+        ax.set_ylabel("Predicted price (SEK)")
+        ax.set_title("Model predictions vs actual price")
+
+        return fig
+    except Exception as e:
+        st.error(f"Error creating prediction plot: {e}")
+        return None
 
 # streamlit app
 def main():
@@ -296,38 +334,48 @@ def main():
         model_stats = get_model_stats(df_clean)
 
         # display metrics
-        col1, col2, col3 = st.columns(3)
+        if model_stats is not None:
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric(
+                    label="RMSE (Root Mean Square Error)",
+                    value=f"{model_stats['rmse']:.2f} SEK",
+                    help="Average prediction error. Lower values indicate better accuracy."
+                )
 
-        with col1:
-            st.metric(
-                label="RMSE (Root Mean Square Error)",
-                value=f"{model_stats['rmse']:.2f} SEK",
-                help="Average prediction error. Lower values indicate better accuracy."
-            )
+            with col2:
+                st.metric(
+                    label="R² Score",
+                    value=f"{model_stats['r2']:.4f}",
+                    help="Proportion of variance explained by the model. Higher values (closer to 1) indicate better fit."
+                )
+            with col3:
+                st.metric(
+                    label="MAE (Mean Absolute Error)",
+                    value=f"{model_stats['mae']:.2f} SEK",
+                    help="Average absolute error. Lower values indicate better accuracy."
+                )
 
-        with col2:
-            st.metric(
-                label="R² Score",
-                value=f"{model_stats['r2']:.4f}",
-                help="Proportion of variance explained by the model. Higher values (closer to 1) indicate better fit."
-            )
-        with col3:
-            st.metric(
-                label="MAE (Mean Absolute Error)",
-                value=f"{model_stats['mae']:.2f} SEK",
-                help="Average absolute error. Lower values indicate better accuracy."
-            )
+            if model_stats and "top_features" in model_stats:
+                top_features_df = model_stats["top_features"]
 
-        if model_stats and "top_features" in model_stats:
-            top_features_df = model_stats["top_features"]
+                st.subheader("Top features used in the model")
+                top_features_df.insert(0, "Number", range(1, len(top_features_df) + 1))
 
-            st.subheader("Top features used in the model")
-            top_features_df.insert(0, "Number", range(1, len(top_features_df) + 1))
+                st.table(top_features_df[["Number", "Feature", "Importance"]])
+            else:
+                st.warning("Top features data not avilable")
 
-            st.table(top_features_df[["Number", "Feature", "Importance"]])
-        else:
-            st.warning("Top features data not avilable")
-
+        st.subheader("Prediction accuracy")
+        st.write("This chart shows the models predictions compared to actual prices:")
+        pred_fig = create_prediction_vs_actual_plot()
+        
+        if pred_fig:
+            st.pyplot(pred_fig)
+            st.write("""
+            Points above the line are overestimated, points below are underestimated.
+            The closer points are to the line, the more accurate the model.
+            """)
 
 
 if __name__ == "__main__":

@@ -2,8 +2,7 @@ import pandas as pd
 import re
 import numpy as np
 import json
-from sklearn.preprocessing import OneHotEncoder,OrdinalEncoder, StandardScaler,MinMaxScaler,MultiLabelBinarizer
-from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.preprocessing import OneHotEncoder, StandardScaler,MultiLabelBinarizer
 from sklearn.base import BaseEstimator, TransformerMixin
 import unicodedata
 import ast
@@ -12,8 +11,7 @@ from sklearn.model_selection import train_test_split,GridSearchCV
 from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error,make_scorer,root_mean_squared_error
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
-from sklearn.experimental import enable_iterative_imputer
-from sklearn.impute import IterativeImputer,SimpleImputer
+from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import FunctionTransformer
 from geopy.geocoders import Nominatim
 import pickle
@@ -130,10 +128,6 @@ def clean_data(df):
         if col in df_clean.columns:
             df_clean[col] = df_clean[col].fillna(df_clean[col].median())
 
-    # # superhost feature
-    # if "host_is_superhost" in df_clean.columns:
-        df_clean["host_is_superhost_num"] = df_clean["host_is_superhost"].apply(lambda x: 1 if x == "t" else 0)
-
 
     if "latitude" in df_clean.columns and "longitude" in df_clean.columns:
         stockholm_center = (59.3293, 18.0686)
@@ -142,13 +136,6 @@ def clean_data(df):
     if "availability_365" in df_clean.columns:
         df_clean["availability_rate"] = df_clean["availability_365"] / 365
         df_clean["scarcity"] = 1 - df_clean["availability_rate"]
-
-    # check if instant bookable
-    if "instant_bookable" in df_clean.columns:
-        df_clean["instant_bookable_num"] = df_clean["instant_bookable"].apply(lambda x: 1 if x == "t" else 0)
-
-    if "reviews_per_month" in df_clean.columns:
-        df_clean["reviews_per_monthn"] = df_clean["reviews_per_month"].fillna(0)
 
     df_clean["num_amenities"] = df_clean["amenities"].apply(lambda x: len(ast.literal_eval(x)))
 
@@ -206,18 +193,14 @@ def clip_outliers(X):
     lower = np.quantile(X, 0.01, axis=0)
     upper = np.quantile(X, 0.99, axis=0)
     return np.clip(X, lower, upper)
-# mean_imputer = SimpleImputer(strategy='mean')
-# median_imputer = SimpleImputer(strategy='median')
-# iterative_imputer = IterativeImputer(random_state=0)
-# standard_scaler = StandardScaler()
-# minmax_scaler = MinMaxScaler()
+
 def create_transformer():
     clean_norm = FunctionTransformer(parse_clean_and_normalize, validate=False)
 
     categorical_features = ["neighbourhood", "room_type"]
     numerical_features = [
         "latitude", "longitude", "bedrooms", "accommodates", "bathrooms",
-        "beds", "minimum_nights", "avg_review_score", "location_premium", "scarcity", "dist_to_center"
+        "beds", "minimum_nights","scarcity","dist_to_center", "avg_review_score", "location_premium"
     ]
 
     amenities_pipeline = Pipeline([
@@ -296,7 +279,8 @@ def fit_model(df_clean):
     scoring=scoring,
     refit="r2",
     n_jobs=-1,
-    verbose=1
+    verbose=1,
+    error_score='raise'
     )
 
     if df_clean is None:
@@ -354,10 +338,6 @@ def fit_model(df_clean):
 
         # Save top 20 features
         top_features = feature_importance.head(20)
-        # top_features.to_csv("top_features.csv", index=False)
-
-        # print("\nTop 10 Important Features:")
-        # print(top_features.head(10))
 
 
     return rmse, r2, mae, top_features
@@ -369,18 +349,11 @@ def load_model():
     return loaded_model
 
 
-
-
-
-
-# train = train_price_model(df_clean)
-# advanced print with the train_price_model
-
-
-
-#address format(string): Street Address, Neighborhood, City, Country
+#address format(string): Street Address, City, Country
 geolocator = Nominatim(user_agent="airbnb_geocoder")
 def get_lat_long_from_address(address):
+    """Returns latitude and longitude based on address
+    address: Street Address, City, Country """
     try:
         time.sleep(1)
         location = geolocator.geocode(address)
@@ -393,7 +366,7 @@ def get_lat_long_from_address(address):
         return None, None
 
 def get_top_neighbourhoods(df_clean ,n):
-
+    """Returns the most expensive neighborhoods"""
     top_neighbourhoods = df_clean.groupby("neighbourhood_cleansed")["price"].agg(["mean", "count"])
     top_neighbourhoods = top_neighbourhoods[top_neighbourhoods["count"] > 10]
     return top_neighbourhoods.sort_values("mean", ascending=False).head(n)
@@ -419,7 +392,9 @@ def get_top_amenities(df_clean, n):
 
 
 
-def get_dynamic_title_tips(df, neighborhood, room_type, ngram_size=2, top_n=5):
+def get_dynamic_title_tips(df, neighborhood, room_type, ngram_size=2, top_n=10):
+    """Returns title keyword tips based on the neighborhood. 
+    Gets similiar listings and then returns the most frequently used keywords."""
     # Filter listings based on neighborhood and room type
     similar = df[
         (df["neighbourhood_cleansed"] == neighborhood + "s") &
@@ -433,11 +408,11 @@ def get_dynamic_title_tips(df, neighborhood, room_type, ngram_size=2, top_n=5):
     titles = " ".join(similar["name"].fillna("").astype(str)).lower()
     words = re.findall(r"\b[a-z]{3,}\b", titles)
 
-    # Optional: remove stopwords
+    # remove stopwords
     stop_words = {"and", "the", "with", "for", "from", "this", "that", "have", "has", "och", "med", "på", "för"}
     filtered_words = [w for w in words if w not in stop_words]
 
-    # Generate n-grams (e.g., bigrams if ngram_size=2)
+    # Generate n-grams
     n_grams = ngrams(filtered_words, ngram_size)
     phrase_counter = Counter([" ".join(gram) for gram in n_grams])
 
@@ -481,7 +456,7 @@ def predict_price(features_dict):
 
         # make sure all required columns are present
         required_cols = ["neighbourhood", "room_type", "latitude", "longitude",
-                        "bedrooms", "accommodates", "bathrooms", "beds", "minimum_nights", "amenities", "num_amenities", "dist_to_center", "location_premium", "avg_review_score", "scarcity"]
+                        "bedrooms", "accommodates", "bathrooms", "beds", "minimum_nights", "amenities", "num_amenities", "dist_to_center", "scarcity", "avg_review_score", "location_premium"]
 
         df_clean = clean_data(load_data())
 
@@ -505,11 +480,12 @@ def predict_price(features_dict):
     except Exception as e:
         print(f"Error in prediction: {e}")
         return None
+    
 if __name__ == "__main__":
     df = load_data()
     df_clean = clean_data(df)
     rmse, r2, mae, top_features = fit_model(df_clean)
 
-    print(f"RMSE: {rmse:.2f}")
-    print(f"R²: {r2:.4f}")
-    print(f"MAE: {mae:.4f}")
+    # print(f"RMSE: {rmse:.2f}")
+    # print(f"R²: {r2:.4f}")
+    # print(f"MAE: {mae:.4f}")

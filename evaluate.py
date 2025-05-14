@@ -24,15 +24,15 @@ if __name__ =="__main__":
 
 
 # Prepare SHAP explainer
-x_test_transformed = model.named_steps['preprocessing'].transform(x_test)
-if hasattr(x_test_transformed, "toarray"):
-    x_test_transformed = x_test_transformed.toarray()
-explainer = shap.Explainer(model.named_steps['regressor'], x_test_transformed)
-shap_values = explainer(x_test_transformed,check_additivity=False)
+# x_test_transformed = model.named_steps['preprocessing'].transform(x_test)
+# if hasattr(x_test_transformed, "toarray"):
+#     x_test_transformed = x_test_transformed.toarray()
+# explainer = shap.Explainer(model.named_steps['regressor'], x_test_transformed)
+# shap_values = explainer(x_test_transformed,check_additivity=False)
 
-# Summary plot (global)
-shap.plots.beeswarm(shap_values)
+# # Summary plot (global)
+# shap.plots.beeswarm(shap_values)
 
-# Force plot (local for individual prediction)
-shap.plots.force(shap_values[0])
+# # Force plot (local for individual prediction)
+# shap.plots.force(shap_values[0])
 
