@@ -168,7 +168,7 @@ def main():
         col1, col2 = st.columns(2)
         with col1:
             address = st.text_input("Address", "Götgatan 14, Stockholm, Sweden")
-            neighborhood = st.text_input("Neighborhood")
+            # neighborhood = st.text_input("Neighborhood")
             use_address = st.checkbox("Use address for location", value=True)
 
         with col2:

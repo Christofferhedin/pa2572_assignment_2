@@ -81,10 +81,10 @@ def clean_data(df):
     df_clean["price"] = df_clean["price"].replace("[\$,]", "", regex=True).astype(float)
 
     # remove extreme outliers in price
-    df_clean = df_clean[(df_clean["price"] >= df_clean["price"].quantile(0.05)) & (df_clean["price"] <= df_clean["price"].quantile(0.95))]
+    df_clean = df_clean[(df_clean["price"] >= df_clean["price"].quantile(0.05)) & (df_clean["price"] <= df_clean["price"].quantile(0.9))]
 
     # handle minimum_nights outliers
-    df_clean = df_clean[(df_clean["minimum_nights"] >= 1) & (df_clean["minimum_nights"] <= df_clean["minimum_nights"].quantile(0.99))]
+    df_clean = df_clean[(df_clean["minimum_nights"] >= 1) & (df_clean["minimum_nights"] <= df_clean["minimum_nights"].quantile(0.98))]
 
     # handle missing values for numerical columns
     numeric_cols = ["bathrooms", "bedrooms", "beds", "accommodates", "minimum_nights"]
@@ -486,6 +486,6 @@ if __name__ == "__main__":
     df_clean = clean_data(df)
     rmse, r2, mae, top_features = fit_model(df_clean)
 
-    # print(f"RMSE: {rmse:.2f}")
-    # print(f"R²: {r2:.4f}")
-    # print(f"MAE: {mae:.4f}")
+    print(f"RMSE: {rmse:.2f}")
+    print(f"R²: {r2:.4f}")
+    print(f"MAE: {mae:.4f}")
