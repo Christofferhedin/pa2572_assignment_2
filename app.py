@@ -144,6 +144,9 @@ def create_prediction_vs_actual_plot():
 
 # streamlit app
 def main():
+    
+    if "custom_amenities" not in st.session_state:
+        st.session_state.custom_amenities = []
     st.title("Stockholm Airbnb Price Estimator")
     st.write("Find out how much your property could earn on Airbnb and get tips to make your listing stand out!")
 
@@ -224,9 +227,10 @@ def main():
 
         # other amenities
         other_amenity = st.text_input("Add other amenity (Enter to add)")
-        if other_amenity and other_amenity not in selected_amenities:
-            selected_amenities.append(other_amenity)
-            st.write(f"Added {other_amenity} to amenities list")
+        if other_amenity and other_amenity not in st.session_state.custom_amenities:
+            st.session_state.custom_amenities.append(other_amenity)
+        
+        selected_amenities += st.session_state.custom_amenities
 
         st.write(f"Total selected amenities: {len(selected_amenities)}")
 
