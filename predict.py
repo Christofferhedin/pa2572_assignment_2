@@ -205,7 +205,7 @@ def create_transformer():
 
     amenities_pipeline = Pipeline([
     ("clean_norm", clean_norm),
-    ("topk_binarize", TopKMultiLabelBinarizer(top_k=30))
+    ("topk_binarize", TopKMultiLabelBinarizer())
     ])
 
     categorical_pipeline = Pipeline([
@@ -337,7 +337,7 @@ def fit_model(df_clean):
         feature_importance = feature_importance.sort_values('Importance', ascending=False)
 
         # Save top 20 features
-        top_features = feature_importance.head(20)
+        top_features = feature_importance.head(10)
 
 
     return rmse, r2, mae, top_features

@@ -1,5 +1,5 @@
 import streamlit as st
-from otherpy import predict_price, load_model, load_data, clean_data, get_top_amenities, get_lat_long_from_address, normalize_amenity, get_dynamic_title_tips, fit_model,parse_clean_and_normalize,TopKMultiLabelBinarizer,clip_outliers
+from predict import predict_price, load_model, load_data, clean_data, get_top_amenities, get_lat_long_from_address, normalize_amenity, get_dynamic_title_tips, fit_model,parse_clean_and_normalize,TopKMultiLabelBinarizer,clip_outliers
 from collections import Counter
 import re
 import ast
